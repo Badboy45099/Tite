@@ -3,14 +3,14 @@ if getgenv().SAR.Loaded then return end
 getgenv().SAR.Loaded = true
 
 -- 1. PERSISTENT TELEPORTATION MANAGER (FIXED)
--- Make sure to update this with your RAW GitHub URL once you create the file!
-local SELF_URL = "https://githubusercontent.com"
+-- Update URL here↓
+local SELF_URL = "https://raw.githubusercontent.com/Badboy45099/Tite/main/main.lua"
 
 local function hookTeleport()
     if queueonteleport then
         queueonteleport([[
             repeat task.wait() until game:IsLoaded()
-            loadstring(game:HttpGet("]] .. SELF_URL .. [["))()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Badboy45099/Tite/main/main.lua"))()
         ]])
     end
 end
@@ -23,8 +23,8 @@ local InterfaceManager = loadstring(game:HttpGet("https://githubusercontent.com"
 
 -- Create the main window overlay
 local Window = Fluent:CreateWindow({
-    Title = "SAR Universal Hub",
-    SubTitle = "by Badboy45099",
+    Title = "WOLF",
+    SubTitle = "by Badboy",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 460),
     Acrylic = true,
