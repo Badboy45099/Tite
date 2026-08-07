@@ -1,0 +1,88 @@
+getgenv().SAR = getgenv().SAR or {Loaded = false}
+if getgenv().SAR.Loaded then return end
+getgenv().SAR.Loaded = true
+
+-- 1. PERSISTENT TELEPORTATION MANAGER (FIXED)
+-- Make sure to update this with your RAW GitHub URL once you create the file!
+local SELF_URL = "https://githubusercontent.com"
+
+local function hookTeleport()
+    if queueonteleport then
+        queueonteleport([[
+            repeat task.wait() until game:IsLoaded()
+            loadstring(game:HttpGet("]] .. SELF_URL .. [["))()
+        ]])
+    end
+end
+game:GetService("Players").LocalPlayer.OnTeleport:Connect(hookTeleport)
+
+-- 2. INITIALIZE THE UI LIBRARY (Fluent Modded for Compatibility)
+local Fluent = loadstring(game:HttpGet("https://github.com/StyearX/Fluent-Modded/releases/download/Fluent/FluentPro"))()
+local SaveManager = loadstring(game:HttpGet("https://githubusercontent.com"))()
+local InterfaceManager = loadstring(game:HttpGet("https://githubusercontent.com"))()
+
+-- Create the main window overlay
+local Window = Fluent:CreateWindow({
+    Title = "SAR Universal Hub",
+    SubTitle = "by Badboy45099",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl -- Press Left Ctrl to hide/unhide menu
+})
+
+-- 3. DIVIDE INTO CATEGORIES (TABS)
+local Tabs = {
+    Main = Window:AddTab({ Title = "Main", Icon = "home" }),
+    Character = Window:AddTab({ Title = "Character", Icon = "user" }),
+    Vision = Window:AddTab({ Title = "Vision", Icon = "eye" }),
+    Games = Window:AddTab({ Title = "Games", Icon = "gamepad" }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+}
+
+-- 4. ADD UNIVERSAL TOGGLES WITH PERSISTENCE (SAVE ON LOGOUT)
+-- Example 1: Main Category Toggle
+local MainToggle = Tabs.Main:AddToggle("WolfFeature", {
+    Title = "Activate Wolf Protocol 🐺", 
+    Default = false
+})
+
+MainToggle:OnChanged(function(Value)
+    print("Wolf Feature state changed to: ", Value)
+    if Value then
+        -- Insert your active code here
+    else
+        -- Insert your stop code here
+    end
+end)
+
+-- Example 2: Character Category Toggle
+local SpeedToggle = Tabs.Character:AddToggle("SuperSpeed", {
+    Title = "Enable Universal Speed", 
+    Default = false
+})
+
+SpeedToggle:OnChanged(function(Value)
+    if Value then
+        game:GetService("Players").LocalPlayer.Character.Humanoid.WalkSpeed = 50
+    else
+        game:GetService("Players").LocalPlayer.Character.Humanoid.WalkSpeed = 16
+    end
+end)
+
+-- 5. AUTOMATIC SYSTEM FOR SAVING CONFIGURATION
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+
+InterfaceManager:SetFolder("SAR_Universal_Configs")
+SaveManager:SetFolder("SAR_Universal_Configs")
+
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+
+-- Auto-load saved settings when the player joins/logins
+SaveManager:LoadAutoloadConfig()
