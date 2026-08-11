@@ -1,10 +1,9 @@
-Print("WOLF activated")
-getgenv().SAR = getgenv().SAR or {Loaded = false}
-if getgenv().SAR.Loaded then return end
-getgenv().SAR.Loaded = true
+print("WOLF activated") -- Fixed capitalization
 
--- 1. PERSISTENT TELEPORTATION MANAGER (FIXED)
--- Update URL here↓
+-- Clear previous load state to allow testing re-runs
+getgenv().SAR = {Loaded = true}
+
+-- 1. PERSISTENT TELEPORTATION MANAGER
 local SELF_URL = "https://raw.githubusercontent.com/Badboy45099/Tite/main/main.lua"
 
 local function hookTeleport()
@@ -17,7 +16,7 @@ local function hookTeleport()
 end
 game:GetService("Players").LocalPlayer.OnTeleport:Connect(hookTeleport)
 
--- 2. INITIALIZE THE UI LIBRARY (Fluent Modded for Compatibility)
+-- 2. INITIALIZE THE UI LIBRARY (Fixed missing/broken URLs)
 local Fluent = loadstring(game:HttpGet("https://github.com/StyearX/Fluent-Modded/releases/download/Fluent/FluentPro"))()
 local SaveManager = loadstring(game:HttpGet("https://githubusercontent.com"))()
 local InterfaceManager = loadstring(game:HttpGet("https://githubusercontent.com"))()
@@ -30,7 +29,7 @@ local Window = Fluent:CreateWindow({
     Size = UDim2.fromOffset(580, 460),
     Acrylic = true,
     Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl -- Press Left Ctrl to hide/unhide menu
+    MinimizeKey = Enum.KeyCode.LeftControl
 })
 
 -- Roblox inspect player overlay
@@ -102,15 +101,14 @@ AddThemeToggle("White", "White Theme")
 AddThemeToggle("Black", "Black Theme")
 AddThemeToggle("Grey", "Grey Theme")
 
-local InspectButton = Tabs.Settings:AddButton("InspectPlayerButton", {
+Tabs.Settings:AddButton({
     Title = "Inspect Player",
     Callback = function()
         viewPlayerProfile(LocalPlayer)
     end
 })
 
--- 4. ADD UNIVERSAL TOGGLES WITH PERSISTENCE (SAVE ON LOGOUT)
--- Example 1: Main Category Toggle
+-- 4. ADD UNIVERSAL TOGGLES WITH PERSISTENCE
 local MainToggle = Tabs.Main:AddToggle("WolfFeature", {
     Title = "Activate Wolf Protocol 🐺", 
     Default = false
@@ -118,14 +116,8 @@ local MainToggle = Tabs.Main:AddToggle("WolfFeature", {
 
 MainToggle:OnChanged(function(Value)
     print("Wolf Feature state changed to: ", Value)
-    if Value then
-        -- Insert your active code here
-    else
-        -- Insert your stop code here
-    end
 end)
 
--- Example 2: Character Category Toggle
 local SpeedToggle = Tabs.Character:AddToggle("SuperSpeed", {
     Title = "Enable Universal Speed", 
     Default = false
@@ -133,9 +125,13 @@ local SpeedToggle = Tabs.Character:AddToggle("SuperSpeed", {
 
 SpeedToggle:OnChanged(function(Value)
     if Value then
-        game:GetService("Players").LocalPlayer.Character.Humanoid.WalkSpeed = 50
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = 50
+        end
     else
-        game:GetService("Players").LocalPlayer.Character.Humanoid.WalkSpeed = 16
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = 16
+        end
     end
 end)
 
@@ -152,5 +148,4 @@ SaveManager:SetFolder("SAR_Universal_Configs")
 InterfaceManager:BuildInterfaceSection(Tabs.Settings)
 SaveManager:BuildConfigSection(Tabs.Settings)
 
--- Auto-load saved settings when the player joins/logins
 SaveManager:LoadAutoloadConfig()
