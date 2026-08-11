@@ -1,3 +1,4 @@
+Print("WOLF activated")
 getgenv().SAR = getgenv().SAR or {Loaded = false}
 if getgenv().SAR.Loaded then return end
 getgenv().SAR.Loaded = true
@@ -32,6 +33,25 @@ local Window = Fluent:CreateWindow({
     MinimizeKey = Enum.KeyCode.LeftControl -- Press Left Ctrl to hide/unhide menu
 })
 
+-- Roblox inspect player overlay
+local GuiService = game:GetService("GuiService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local function viewPlayerProfile(targetPlayer)
+    if targetPlayer then
+        pcall(function()
+            GuiService:InspectPlayerFromUserId(targetPlayer.UserId)
+        end)
+    end
+end
+
+LocalPlayer.Chatted:Connect(function(message)
+    if message == "/inspect" then
+        viewPlayerProfile(LocalPlayer)
+    end
+end)
+
 -- 3. DIVIDE INTO CATEGORIES (TABS)
 local Tabs = {
     Main = Window:AddTab({ Title = "Main", Icon = "home" }),
@@ -40,6 +60,54 @@ local Tabs = {
     Games = Window:AddTab({ Title = "Games", Icon = "gamepad" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
+
+-- Theme selection menu
+local function ApplyTheme(ThemeName)
+    local themeMap = {
+        White = "Light",
+        Black = "Dark",
+        Grey = "Dark"
+    }
+
+    local selectedTheme = themeMap[ThemeName] or "Dark"
+    local ok, err = pcall(function()
+        if Window.ChangeTheme then
+            Window:ChangeTheme(selectedTheme)
+        elseif Window.SetTheme then
+            Window:SetTheme(selectedTheme)
+        elseif Window.Theme ~= nil then
+            Window.Theme = selectedTheme
+        end
+    end)
+
+    if not ok then
+        warn("Unable to apply theme:", err)
+    end
+end
+
+local function AddThemeToggle(ThemeName, DisplayName)
+    local toggle = Tabs.Settings:AddToggle("Theme_" .. ThemeName, {
+        Title = DisplayName,
+        Default = ThemeName == "Black"
+    })
+
+    toggle:OnChanged(function(Value)
+        if Value then
+            ApplyTheme(ThemeName)
+        end
+    end)
+end
+
+AddThemeToggle("White", "White Theme")
+AddThemeToggle("Black", "Black Theme")
+AddThemeToggle("Grey", "Grey Theme")
+
+local InspectButton = Tabs.Settings:AddButton("InspectPlayerButton", {
+    Title = "Inspect Player",
+    Callback = function()
+        viewPlayerProfile(LocalPlayer)
+    end
+})
 
 -- 4. ADD UNIVERSAL TOGGLES WITH PERSISTENCE (SAVE ON LOGOUT)
 -- Example 1: Main Category Toggle
