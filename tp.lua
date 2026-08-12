@@ -1,11 +1,45 @@
 -- ====================================================
 -- STANDALONE TP BEHIND PLAYER SCRIPT
--- File: TP_Behind.lua
+-- File: tp.lua
 -- ====================================================
 
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
+
+local ConfigFileName = "WolfTP_Settings.json"
+
+----------------------------------------------------
+-- CONFIG SYSTEM (SAVE / LOAD)
+----------------------------------------------------
+local Settings = {
+    ShowFloatBtn = false,
+    TpMode = "Random"
+}
+
+local function saveConfig()
+    if writefile then
+        pcall(function()
+            writefile(ConfigFileName, HttpService:JSONEncode(Settings))
+        end)
+    end
+end
+
+local function loadConfig()
+    if readfile and isfile and isfile(ConfigFileName) then
+        local success, result = pcall(function()
+            return HttpService:JSONDecode(readfile(ConfigFileName))
+        end)
+        if success and type(result) == "table" then
+            for k, v in pairs(result) do
+                Settings[k] = v
+            end
+        end
+    end
+end
+
+loadConfig()
 
 ----------------------------------------------------
 -- DUPLICATE EXECUTION CLEANUP
@@ -44,7 +78,7 @@ local Tabs = {
 ----------------------------------------------------
 -- VARIABLES
 ----------------------------------------------------
-local selectedTpMode = "Random"
+local selectedTpMode = Settings.TpMode or "Random"
 local selectedPlayerName = nil
 local lockedPlayer = nil
 
@@ -74,7 +108,7 @@ FloatBtn.Text = "TP"
 FloatBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 FloatBtn.TextSize = 18
 FloatBtn.Font = Enum.Font.SourceSansBold
-FloatBtn.Visible = false
+FloatBtn.Visible = Settings.ShowFloatBtn
 FloatBtn.Parent = ScreenGui
 
 local UICorner = Instance.new("UICorner")
@@ -159,12 +193,6 @@ local function teleportBehind(targetPlayer)
     local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
 
     if targetHRP and myHRP then
-        ----------------------------------------------------
-        -- ADJUST POSITION BEHIND PLAYER HERE:
-        -- CFrame.new(0, 0, 3) = 3 studs directly BEHIND the target
-        -- Change '3' to larger/smaller number for distance
-        -- Change '0, 0' to adjust X (Left/Right) or Y (Up/Down)
-        ----------------------------------------------------
         local offset = CFrame.new(0, 0, 3)
         myHRP.CFrame = targetHRP.CFrame * offset
     end
@@ -198,22 +226,28 @@ FloatBtn.MouseButton1Click:Connect(executeTeleport)
 -- UI CONTROLS
 ----------------------------------------------------
 
-Tabs.Main:AddToggle("ShowTpFloatBtn", {
+local FloatBtnToggle = Tabs.Main:AddToggle("ShowTpFloatBtn", {
     Title = "Show On-Screen TP Button",
-    Default = false,
-    Callback = function(state)
-        FloatBtn.Visible = state
-    end
+    Default = Settings.ShowFloatBtn
 })
 
-Tabs.Main:AddDropdown("TpCategory", {
+FloatBtnToggle:OnChanged(function(state)
+    FloatBtn.Visible = state
+    Settings.ShowFloatBtn = state
+    saveConfig()
+end)
+
+local CategoryDropdown = Tabs.Main:AddDropdown("TpCategory", {
     Title = "TP Target Mode",
     Values = {"Random", "Nearest", "Specific"},
-    Default = "Random",
-    Callback = function(val)
-        selectedTpMode = val
-    end
+    Default = Settings.TpMode or "Random"
 })
+
+CategoryDropdown:OnChanged(function(val)
+    selectedTpMode = val
+    Settings.TpMode = val
+    saveConfig()
+end)
 
 Tabs.Main:AddButton({
     Title = "TP to Nearest (Skip Closest)",
@@ -257,11 +291,12 @@ end
 local SpecificPlayerDropdown = Tabs.Main:AddDropdown("SpecificPlayerSelect", {
     Title = "Select Specific Player",
     Values = getPlayerList(),
-    Default = nil,
-    Callback = function(val)
-        selectedPlayerName = val
-    end
+    Default = nil
 })
+
+SpecificPlayerDropdown:OnChanged(function(val)
+    selectedPlayerName = val
+end)
 
 Tabs.Main:AddInput("PlayerSearchInput", {
     Title = "Search Player Name",
