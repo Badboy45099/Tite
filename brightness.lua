@@ -30,7 +30,7 @@ function BrightnessSliderModule.Create(BrightnessTitle, UIS)
         local Fill = Instance.new("Frame")
         Fill.Name = "Fill"
         Fill.Size = UDim2.new(0, 0, 1, 0)
-        Fill.BackgroundColor3 = Color3.fromRGB(255, 200, 0) -- Warm yellow accent for brightness
+        Fill.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
         Fill.BorderSizePixel = 0
         Fill.Parent = Track
 
@@ -71,16 +71,14 @@ function BrightnessSliderModule.Create(BrightnessTitle, UIS)
             if trackWidth > 0 then
                 local percent = math.clamp((inputX - trackX) / trackWidth, 0, 1)
                 local minVal = 0
-                local maxVal = 10 -- Range from 0 to 10
+                local maxVal = 10
                 
-                -- Calculate brightness rounded to 1 decimal place
                 local newBrightness = math.floor((minVal + (percent * (maxVal - minVal))) * 10 + 0.5) / 10
 
                 Fill.Size = UDim2.new(percent, 0, 1, 0)
                 Knob.Position = UDim2.new(percent, 0, 0.5, 0)
                 BrightnessTitle:SetTitle("Brightness: " .. string.format("%.1f", newBrightness))
 
-                -- Apply to Roblox Lighting
                 Lighting.Brightness = newBrightness
             end
         end
