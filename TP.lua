@@ -1,0 +1,360 @@
+local TeleportModule = {}
+
+function TeleportModule.Create(targetTab, FluentLibrary)
+    -- Anti-Duplication Check
+    if getgenv().TeleportScriptLoaded then
+        for _, gui in ipairs(game:GetService("CoreGui"):GetChildren()) do
+            if gui.Name == "TpDraggableGui" then
+                gui:Destroy()
+            end
+        end
+        for _, beacon in ipairs(workspace:GetChildren()) do
+            if beacon.Name:sub(1, 7) == "Beacon_" then
+                beacon:Destroy()
+            end
+        end
+    end
+    getgenv().TeleportScriptLoaded = true
+
+    local Players = game:GetService("Players")
+    local LocalPlayer = Players.LocalPlayer
+    local HttpService = game:GetService("HttpService")
+
+    local ConfigFileName = "FluentUI_SavedPositions.json"
+
+    -- Master Data Storage
+    local SavedPositions = {}
+    local CurrentCategoryMode = "Saved position"
+    local SelectedSaveName = ""
+    local SelectedSpecificPlayer = nil
+    local LockedPlayer = nil
+    local LockModeEnabled = false
+
+    -- Helper Functions
+    local function LoadSavedPositionsFile()
+        if isfile and isfile(ConfigFileName) then
+            local success, content = pcall(readfile, ConfigFileName)
+            if success and content then
+                local decodedOk, decodedData = pcall(function() return HttpService:JSONDecode(content) end)
+                if decodedOk and type(decodedData) == "table" then
+                    SavedPositions = decodedData
+                end
+            end
+        end
+    end
+
+    local function WritePositionsToFile()
+        if writefile then
+            writefile(ConfigFileName, HttpService:JSONEncode(SavedPositions))
+        end
+    end
+
+    local function ResetAllSavedPositions()
+        SavedPositions = {}
+        if writefile then
+            writefile(ConfigFileName, HttpService:JSONEncode(SavedPositions))
+        end
+    end
+
+    local function GetHRP(player)
+        player = player or LocalPlayer
+        if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            return player.Character.HumanoidRootPart
+        end
+        return nil
+    end
+
+    LoadSavedPositionsFile()
+
+    ----------------------------------------------------
+    -- 1. FLOATING TOP TP BUTTON
+    ----------------------------------------------------
+    local DraggableIcon = Instance.new("ScreenGui")
+    local IconBtn = Instance.new("TextButton")
+    local UICorner = Instance.new("UICorner")
+
+    DraggableIcon.Name = "TpDraggableGui"
+    DraggableIcon.Parent = game:GetService("CoreGui")
+    DraggableIcon.Enabled = false
+
+    IconBtn.Name = "TpBtn"
+    IconBtn.Parent = DraggableIcon
+    IconBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+    IconBtn.Position = UDim2.new(0.05, 0, 0.4, 0)
+    IconBtn.Size = UDim2.new(0, 50, 0, 50)
+    IconBtn.Text = "TP"
+    IconBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    IconBtn.TextSize = 18
+    IconBtn.Font = Enum.Font.SourceSansBold
+    IconBtn.Active = true
+    IconBtn.Draggable = true
+
+    UICorner.CornerRadius = UDim.new(0, 12)
+    UICorner.Parent = IconBtn
+
+    IconBtn.MouseButton1Click:Connect(function()
+        local myHRP = GetHRP(LocalPlayer)
+        if not myHRP then return end
+
+        if CurrentCategoryMode == "Saved position" then
+            if SelectedSaveName ~= "" and SavedPositions[SelectedSaveName] then
+                local pos = SavedPositions[SelectedSaveName]
+                myHRP.CFrame = CFrame.new(pos.X, pos.Y, pos.Z)
+                FluentLibrary:Notify({Title = "Teleported", Content = "TP'd to: " .. SelectedSaveName, Duration = 2})
+            else
+                FluentLibrary:Notify({Title = "TP Error", Content = "Select a saved file location first!", Duration = 2})
+            end
+        elseif CurrentCategoryMode == "Specific" then
+            if SelectedSpecificPlayer and GetHRP(SelectedSpecificPlayer) then
+                local targetHRP = GetHRP(SelectedSpecificPlayer)
+                myHRP.CFrame = targetHRP.CFrame * CFrame.new(0, 0, 4)
+                FluentLibrary:Notify({Title = "Teleported", Content = "TP'd behind " .. SelectedSpecificPlayer.Name, Duration = 2})
+            else
+                FluentLibrary:Notify({Title = "TP Error", Content = "Select a valid player from dropdown!", Duration = 2})
+            end
+        elseif CurrentCategoryMode == "Random" then
+            local target = nil
+            if LockModeEnabled and LockedPlayer then
+                target = LockedPlayer
+            else
+                local validPlayers = {}
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p ~= LocalPlayer and GetHRP(p) then table.insert(validPlayers, p) end
+                end
+                if #validPlayers > 0 then target = validPlayers[math.random(1, #validPlayers)] end
+            end
+
+            if target and GetHRP(target) then
+                local targetHRP = GetHRP(target)
+                myHRP.CFrame = targetHRP.CFrame * CFrame.new(0, 0, 4)
+                FluentLibrary:Notify({Title = "Teleported", Content = "TP'd to " .. target.Name, Duration = 2})
+            else
+                FluentLibrary:Notify({Title = "TP Error", Content = "No valid target available!", Duration = 2})
+            end
+        end
+    end)
+
+    ----------------------------------------------------
+    -- 2. UI ELEMENTS (ATTACHED TO PASSED TAB)
+    ----------------------------------------------------
+    targetTab:AddToggle("TpBtnToggle", {
+        Title = "Show Floating TP Button",
+        Default = false,
+        Callback = function(Value)
+            DraggableIcon.Enabled = Value
+        end
+    })
+
+    local CategoryDropdown = targetTab:AddDropdown("CategoryDropdown", {
+        Title = "Drop Down Box (Select Mode)",
+        Values = {"Saved position", "Random", "Specific"},
+        Multi = false,
+        Default = 1,
+    })
+
+    local SavedSection = targetTab:AddSection("Saved Positions")
+    local RandomSection = targetTab:AddSection("Random Player Teleport")
+    local SpecificSection = targetTab:AddSection("Specific Player Teleport")
+
+    local SectionMap = {
+        ["Saved position"] = SavedSection,
+        ["Random"] = RandomSection,
+        ["Specific"] = SpecificSection
+    }
+
+    local function SwitchCategoryVisibility(selected)
+        CurrentCategoryMode = selected
+        for name, section in pairs(SectionMap) do
+            if name == selected then
+                section:SetTitle("▼ " .. name .. " [ACTIVE]")
+            else
+                section:SetTitle("► " .. name .. " (Inactive)")
+            end
+        end
+    end
+
+    ----------------------------------------------------
+    -- SAVED POSITION SECTION
+    ----------------------------------------------------
+    local SaveInputText = ""
+
+    SavedSection:AddInput("SaveNameInput", {
+        Title = "Position Name",
+        Default = "",
+        Placeholder = "Enter name (e.g. Base, Bank)...",
+        Callback = function(Value)
+            SaveInputText = Value
+            if Value ~= "" then SelectedSaveName = Value end
+        end
+    })
+
+    local function GetSavedListKeys()
+        local keys = {}
+        for name, _ in pairs(SavedPositions) do table.insert(keys, name) end
+        if #keys == 0 then table.insert(keys, "No saved positions") end
+        return keys
+    end
+
+    local savedFilesDropdown = SavedSection:AddDropdown("SavedFilesDropdown", {
+        Title = "Your Saved File Here",
+        Values = GetSavedListKeys(),
+        Multi = false,
+        Default = 1,
+    })
+
+    savedFilesDropdown:OnChanged(function(Value)
+        if Value ~= "No saved positions" and Value ~= "" then SelectedSaveName = Value end
+    end)
+
+    SavedSection:AddButton({
+        Title = "Save Current Position",
+        Callback = function()
+            if SaveInputText == "" then
+                FluentLibrary:Notify({Title = "Error", Content = "Type a position name first!", Duration = 3})
+                return
+            end
+
+            local myHRP = GetHRP(LocalPlayer)
+            if myHRP then
+                local pos = myHRP.Position
+                SavedPositions[SaveInputText] = {X = pos.X, Y = pos.Y, Z = pos.Z}
+                WritePositionsToFile()
+                SelectedSaveName = SaveInputText
+                savedFilesDropdown:SetValues(GetSavedListKeys())
+                FluentLibrary:Notify({Title = "Saved", Content = "'" .. SaveInputText .. "' saved!", Duration = 3})
+            end
+        end
+    })
+
+    SavedSection:AddButton({
+        Title = "Refresh Saved File List",
+        Callback = function()
+            LoadSavedPositionsFile()
+            savedFilesDropdown:SetValues(GetSavedListKeys())
+            FluentLibrary:Notify({Title = "Refreshed", Content = "Saved positions reloaded.", Duration = 2})
+        end
+    })
+
+    SavedSection:AddButton({
+        Title = "Reset All Saved Positions",
+        Callback = function()
+            ResetAllSavedPositions()
+            SelectedSaveName = ""
+            savedFilesDropdown:SetValues(GetSavedListKeys())
+            FluentLibrary:Notify({Title = "Reset Complete", Content = "All locations erased.", Duration = 3})
+        end
+    })
+
+    ----------------------------------------------------
+    -- RANDOM SECTION
+    ----------------------------------------------------
+    RandomSection:AddButton({
+        Title = "Search Nearest Player",
+        Callback = function()
+            local nearest = nil
+            local shortestDist = math.huge
+            local myHRP = GetHRP(LocalPlayer)
+            if not myHRP then return end
+
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and GetHRP(p) then
+                    local dist = (GetHRP(p).Position - myHRP.Position).Magnitude
+                    if dist < shortestDist then
+                        shortestDist = dist
+                        nearest = p
+                    end
+                end
+            end
+
+            if nearest then
+                LockedPlayer = nearest
+                FluentLibrary:Notify({Title = "Target Set", Content = "Nearest player: " .. nearest.DisplayName, Duration = 3})
+            end
+        end
+    })
+
+    RandomSection:AddToggle("PlayerLockToggle", {
+        Title = "Lock Target Mode (On/Off)",
+        Default = false,
+        Callback = function(Value)
+            LockModeEnabled = Value
+            if not Value then LockedPlayer = nil end
+        end
+    })
+
+    RandomSection:AddButton({
+        Title = "TP Random Player (Safe Distance Click)",
+        Callback = function()
+            local validPlayers = {}
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and GetHRP(p) then table.insert(validPlayers, p) end
+            end
+
+            if #validPlayers > 0 then
+                local target = validPlayers[math.random(1, #validPlayers)]
+                local targetHRP = GetHRP(target)
+                local myHRP = GetHRP(LocalPlayer)
+                if myHRP and targetHRP then
+                    myHRP.CFrame = targetHRP.CFrame * CFrame.new(3, 0, 3)
+                    FluentLibrary:Notify({Title = "Safe TP", Content = "TP'd near " .. target.Name, Duration = 2})
+                end
+            end
+        end
+    })
+
+    ----------------------------------------------------
+    -- SPECIFIC SECTION
+    ----------------------------------------------------
+    local function GetFilteredPlayers(filter)
+        filter = string.lower(filter or "")
+        local list = {}
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer then
+                if filter == "" or string.find(string.lower(p.Name), filter) or string.find(string.lower(p.DisplayName), filter) then
+                    table.insert(list, p.Name)
+                end
+            end
+        end
+        if #list == 0 then table.insert(list, "No match found") end
+        return list
+    end
+
+    local searchPlayerInput = SpecificSection:AddInput("SearchPlayerInput", {
+        Title = "Search Player Name",
+        Default = "",
+        Placeholder = "Type player name to filter...",
+        Callback = function() end
+    })
+
+    local specificDropdown = SpecificSection:AddDropdown("SpecificPlayerDropdown", {
+        Title = "List of Players Drop Down Box",
+        Values = GetFilteredPlayers(""),
+        Multi = false,
+        Default = 1,
+    })
+
+    searchPlayerInput:OnChanged(function(Value)
+        specificDropdown:SetValues(GetFilteredPlayers(Value))
+    end)
+
+    specificDropdown:OnChanged(function(Value)
+        if Value ~= "No match found" then SelectedSpecificPlayer = Players:FindFirstChild(Value) end
+    end)
+
+    SpecificSection:AddButton({
+        Title = "Refresh Player Name",
+        Callback = function()
+            specificDropdown:SetValues(GetFilteredPlayers(searchPlayerInput.Value))
+            FluentLibrary:Notify({Title = "Refreshed", Content = "Player list updated.", Duration = 2})
+        end
+    })
+
+    -- Category Switch Initializer
+    CategoryDropdown:OnChanged(function(Value)
+        SwitchCategoryVisibility(Value)
+    end)
+
+    SwitchCategoryVisibility("Saved position")
+end
+
+return TeleportModule
