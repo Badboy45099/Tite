@@ -1,5 +1,6 @@
--- External Module for TP Features
-return function(PlayerTab, Fluent)
+local TeleportModule = {}
+
+function TeleportModule.Create(PlayerTab, FluentLibrary)
     -- Anti-Duplication Check
     if getgenv().TeleportScriptLoaded then
         for _, gui in ipairs(game:GetService("CoreGui"):GetChildren()) do
@@ -52,7 +53,7 @@ return function(PlayerTab, Fluent)
 
     LoadSavedPositionsFile()
 
-    -- Helper: Reset/Clear Saved Positions File
+    -- Helper: Reset Saved Positions File
     local function ResetAllSavedPositions()
         SavedPositions = {}
         if writefile then
@@ -70,7 +71,7 @@ return function(PlayerTab, Fluent)
     end
 
     ----------------------------------------------------
-    -- 1. FLOATING TOP TP BUTTON (Draggable Icon)
+    -- FLOATING TP BUTTON
     ----------------------------------------------------
     local DraggableIcon = Instance.new("ScreenGui")
     local IconBtn = Instance.new("TextButton")
@@ -103,17 +104,17 @@ return function(PlayerTab, Fluent)
             if SelectedSaveName ~= "" and SavedPositions[SelectedSaveName] then
                 local pos = SavedPositions[SelectedSaveName]
                 myHRP.CFrame = CFrame.new(pos.X, pos.Y, pos.Z)
-                Fluent:Notify({Title = "Teleported", Content = "TP'd to saved position: " .. SelectedSaveName, Duration = 2})
+                FluentLibrary:Notify({Title = "Teleported", Content = "TP'd to: " .. SelectedSaveName, Duration = 2})
             else
-                Fluent:Notify({Title = "TP Error", Content = "Select a saved file location first!", Duration = 2})
+                FluentLibrary:Notify({Title = "TP Error", Content = "Select a saved file location first!", Duration = 2})
             end
         elseif CurrentCategoryMode == "Specific" then
             if SelectedSpecificPlayer and GetHRP(SelectedSpecificPlayer) then
                 local targetHRP = GetHRP(SelectedSpecificPlayer)
                 myHRP.CFrame = targetHRP.CFrame * CFrame.new(0, 0, 4)
-                Fluent:Notify({Title = "Teleported", Content = "TP'd behind " .. SelectedSpecificPlayer.Name, Duration = 2})
+                FluentLibrary:Notify({Title = "Teleported", Content = "TP'd behind " .. SelectedSpecificPlayer.Name, Duration = 2})
             else
-                Fluent:Notify({Title = "TP Error", Content = "Select a valid player from the dropdown!", Duration = 2})
+                FluentLibrary:Notify({Title = "TP Error", Content = "Select a valid player from dropdown!", Duration = 2})
             end
         elseif CurrentCategoryMode == "Random" then
             local target = nil
@@ -122,27 +123,23 @@ return function(PlayerTab, Fluent)
             else
                 local validPlayers = {}
                 for _, p in ipairs(Players:GetPlayers()) do
-                    if p ~= LocalPlayer and GetHRP(p) then
-                        table.insert(validPlayers, p)
-                    end
+                    if p ~= LocalPlayer and GetHRP(p) then table.insert(validPlayers, p) end
                 end
-                if #validPlayers > 0 then
-                    target = validPlayers[math.random(1, #validPlayers)]
-                end
+                if #validPlayers > 0 then target = validPlayers[math.random(1, #validPlayers)] end
             end
 
             if target and GetHRP(target) then
                 local targetHRP = GetHRP(target)
                 myHRP.CFrame = targetHRP.CFrame * CFrame.new(0, 0, 4)
-                Fluent:Notify({Title = "Teleported", Content = "TP'd to " .. target.Name, Duration = 2})
+                FluentLibrary:Notify({Title = "Teleported", Content = "TP'd to " .. target.Name, Duration = 2})
             else
-                Fluent:Notify({Title = "TP Error", Content = "No valid player target available!", Duration = 2})
+                FluentLibrary:Notify({Title = "TP Error", Content = "No valid target available!", Duration = 2})
             end
         end
     end)
 
     ----------------------------------------------------
-    -- 2. INJECT UI DIRECTLY INTO PLAYER TAB
+    -- ATTACH TO PLAYER TAB
     ----------------------------------------------------
     PlayerTab:AddToggle("TpBtnToggle", {
         Title = "Show Floating TP Button",
@@ -159,9 +156,6 @@ return function(PlayerTab, Fluent)
         Default = 1,
     })
 
-    ----------------------------------------------------
-    -- 3. SECTIONS (CONTAINERS)
-    ----------------------------------------------------
     local SavedSection = PlayerTab:AddSection("Saved Positions")
     local RandomSection = PlayerTab:AddSection("Random Player Teleport")
     local SpecificSection = PlayerTab:AddSection("Specific Player Teleport")
@@ -184,27 +178,23 @@ return function(PlayerTab, Fluent)
     end
 
     ----------------------------------------------------
-    -- 4. CATEGORY: SAVED POSITION
+    -- SAVED POSITION SECTION
     ----------------------------------------------------
     local SaveInputText = ""
 
-    local saveNameInput = SavedSection:AddInput("SaveNameInput", {
+    SavedSection:AddInput("SaveNameInput", {
         Title = "Position Name",
         Default = "",
         Placeholder = "Enter name (e.g. Base, Bank)...",
         Callback = function(Value)
             SaveInputText = Value
-            if Value ~= "" then
-                SelectedSaveName = Value
-            end
+            if Value ~= "" then SelectedSaveName = Value end
         end
     })
 
     local function GetSavedListKeys()
         local keys = {}
-        for name, _ in pairs(SavedPositions) do
-            table.insert(keys, name)
-        end
+        for name, _ in pairs(SavedPositions) do table.insert(keys, name) end
         if #keys == 0 then table.insert(keys, "No saved positions") end
         return keys
     end
@@ -217,17 +207,14 @@ return function(PlayerTab, Fluent)
     })
 
     savedFilesDropdown:OnChanged(function(Value)
-        if Value ~= "No saved positions" and Value ~= "" then
-            SelectedSaveName = Value
-        end
+        if Value ~= "No saved positions" and Value ~= "" then SelectedSaveName = Value end
     end)
 
     SavedSection:AddButton({
         Title = "Save Current Position",
-        Description = "Saves coordinates instantly to file",
         Callback = function()
             if SaveInputText == "" then
-                Fluent:Notify({Title = "Error", Content = "Type a position name first!", Duration = 3})
+                FluentLibrary:Notify({Title = "Error", Content = "Type a position name first!", Duration = 3})
                 return
             end
 
@@ -236,11 +223,9 @@ return function(PlayerTab, Fluent)
                 local pos = myHRP.Position
                 SavedPositions[SaveInputText] = {X = pos.X, Y = pos.Y, Z = pos.Z}
                 WritePositionsToFile()
-                
                 SelectedSaveName = SaveInputText
                 savedFilesDropdown:SetValues(GetSavedListKeys())
-
-                Fluent:Notify({Title = "Saved", Content = "'" .. SaveInputText .. "' saved to file!", Duration = 3})
+                FluentLibrary:Notify({Title = "Saved", Content = "'" .. SaveInputText .. "' saved!", Duration = 3})
             end
         end
     })
@@ -250,25 +235,17 @@ return function(PlayerTab, Fluent)
         Callback = function()
             LoadSavedPositionsFile()
             savedFilesDropdown:SetValues(GetSavedListKeys())
-            Fluent:Notify({Title = "Refreshed", Content = "Saved positions reloaded.", Duration = 2})
+            FluentLibrary:Notify({Title = "Refreshed", Content = "Saved positions reloaded.", Duration = 2})
         end
     })
 
     SavedSection:AddButton({
         Title = "Reset All Saved Positions",
-        Description = "Clears all saved coordinates from memory and JSON file",
         Callback = function()
             ResetAllSavedPositions()
-            
             SelectedSaveName = ""
             savedFilesDropdown:SetValues(GetSavedListKeys())
-            
-            for _, beacon in pairs(ActiveBeacons) do
-                if beacon then beacon:Destroy() end
-            end
-            ActiveBeacons = {}
-
-            Fluent:Notify({Title = "Reset Complete", Content = "All saved locations have been erased.", Duration = 3})
+            FluentLibrary:Notify({Title = "Reset Complete", Content = "All locations erased.", Duration = 3})
         end
     })
 
@@ -277,10 +254,9 @@ return function(PlayerTab, Fluent)
 
     SavedSection:AddButton({
         Title = "Pin Selected Position in 3D World",
-        Description = "Spawns a visual beacon at saved spot",
         Callback = function()
             if SelectedSaveName == "" or not SavedPositions[SelectedSaveName] then
-                Fluent:Notify({Title = "Pin Error", Content = "Select a saved file location first!", Duration = 2})
+                FluentLibrary:Notify({Title = "Pin Error", Content = "Select a saved file location first!", Duration = 2})
                 return
             end
 
@@ -317,7 +293,7 @@ return function(PlayerTab, Fluent)
             label.TextScaled = true
 
             ActiveBeacons[SelectedSaveName] = beaconPart
-            Fluent:Notify({Title = "Pinned", Content = "Beacon spawned at " .. SelectedSaveName, Duration = 2})
+            FluentLibrary:Notify({Title = "Pinned", Content = "Beacon spawned at " .. SelectedSaveName, Duration = 2})
         end
     })
 
@@ -328,12 +304,12 @@ return function(PlayerTab, Fluent)
                 if beacon then beacon:Destroy() end
             end
             ActiveBeacons = {}
-            Fluent:Notify({Title = "Cleared", Content = "All visual markers removed.", Duration = 2})
+            FluentLibrary:Notify({Title = "Cleared", Content = "All visual markers removed.", Duration = 2})
         end
     })
 
     ----------------------------------------------------
-    -- 5. CATEGORY: RANDOM
+    -- RANDOM SECTION
     ----------------------------------------------------
     RandomSection:AddButton({
         Title = "Search Nearest Player",
@@ -355,7 +331,7 @@ return function(PlayerTab, Fluent)
 
             if nearest then
                 LockedPlayer = nearest
-                Fluent:Notify({Title = "Target Set", Content = "Nearest player set: " .. nearest.DisplayName, Duration = 3})
+                FluentLibrary:Notify({Title = "Target Set", Content = "Nearest player: " .. nearest.DisplayName, Duration = 3})
             end
         end
     })
@@ -365,41 +341,32 @@ return function(PlayerTab, Fluent)
         Default = false,
         Callback = function(Value)
             LockModeEnabled = Value
-            if not Value then 
-                LockedPlayer = nil 
-                Fluent:Notify({Title = "Target Lock", Content = "Target lock disabled.", Duration = 2})
-            else
-                Fluent:Notify({Title = "Target Lock", Content = "Target lock enabled.", Duration = 2})
-            end
+            if not Value then LockedPlayer = nil end
         end
     })
 
     RandomSection:AddButton({
         Title = "TP Random Player (Safe Distance Click)",
-        Description = "Click this button directly to teleport near a random player safely",
         Callback = function()
             local validPlayers = {}
             for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer and GetHRP(p) then
-                    table.insert(validPlayers, p)
-                end
+                if p ~= LocalPlayer and GetHRP(p) then table.insert(validPlayers, p) end
             end
 
             if #validPlayers > 0 then
                 local target = validPlayers[math.random(1, #validPlayers)]
                 local targetHRP = GetHRP(target)
                 local myHRP = GetHRP(LocalPlayer)
-
                 if myHRP and targetHRP then
                     myHRP.CFrame = targetHRP.CFrame * CFrame.new(3, 0, 3)
-                    Fluent:Notify({Title = "Safe TP", Content = "TP'd near " .. target.Name, Duration = 2})
+                    FluentLibrary:Notify({Title = "Safe TP", Content = "TP'd near " .. target.Name, Duration = 2})
                 end
             end
         end
     })
 
     ----------------------------------------------------
-    -- 6. CATEGORY: SPECIFIC
+    -- SPECIFIC SECTION
     ----------------------------------------------------
     local function GetFilteredPlayers(filter)
         filter = string.lower(filter or "")
@@ -434,32 +401,23 @@ return function(PlayerTab, Fluent)
     end)
 
     specificDropdown:OnChanged(function(Value)
-        if Value ~= "No match found" then
-            SelectedSpecificPlayer = Players:FindFirstChild(Value)
-        end
+        if Value ~= "No match found" then SelectedSpecificPlayer = Players:FindFirstChild(Value) end
     end)
 
     SpecificSection:AddButton({
         Title = "Refresh Player Name",
         Callback = function()
             specificDropdown:SetValues(GetFilteredPlayers(searchPlayerInput.Value))
-            Fluent:Notify({Title = "Refreshed", Content = "Player list updated.", Duration = 2})
+            FluentLibrary:Notify({Title = "Refreshed", Content = "Player list updated.", Duration = 2})
         end
     })
 
-    ----------------------------------------------------
-    -- INITIALIZATION
-    ----------------------------------------------------
+    -- Category Switch Initializer
     CategoryDropdown:OnChanged(function(Value)
         SwitchCategoryVisibility(Value)
     end)
 
-    task.spawn(function()
-        task.wait(0.2)
-        SwitchCategoryVisibility("Saved position")
-        local initialKeys = GetSavedListKeys()
-        if #initialKeys > 0 and initialKeys[1] ~= "No saved positions" then
-            SelectedSaveName = initialKeys[1]
-        end
-    end)
+    SwitchCategoryVisibility("Saved position")
 end
+
+return TeleportModule
