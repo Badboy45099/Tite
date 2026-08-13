@@ -160,23 +160,6 @@ function TeleportModule.Create(PlayerTab, FluentLibrary)
     local RandomSection = PlayerTab:AddSection("Random Player Teleport")
     local SpecificSection = PlayerTab:AddSection("Specific Player Teleport")
 
-    local SectionMap = {
-        ["Saved position"] = SavedSection,
-        ["Random"] = RandomSection,
-        ["Specific"] = SpecificSection
-    }
-
-    local function SwitchCategoryVisibility(selected)
-        CurrentCategoryMode = selected
-        for name, section in pairs(SectionMap) do
-            if name == selected then
-                section:SetTitle("▼ " .. name .. " [ACTIVE]")
-            else
-                section:SetTitle("► " .. name .. " (Inactive)")
-            end
-        end
-    end
-
     ----------------------------------------------------
     -- SAVED POSITION SECTION
     ----------------------------------------------------
@@ -412,12 +395,10 @@ function TeleportModule.Create(PlayerTab, FluentLibrary)
         end
     })
 
-    -- Category Switch Initializer
+    -- Category Switch Tracker
     CategoryDropdown:OnChanged(function(Value)
-        SwitchCategoryVisibility(Value)
+        CurrentCategoryMode = Value
     end)
-
-    SwitchCategoryVisibility("Saved position")
 end
 
 return TeleportModule
