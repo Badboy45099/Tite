@@ -78,7 +78,7 @@ local function SetupAutoExecuteOnTeleport()
         queueFunction([[
             repeat task.wait() until game:IsLoaded()
             task.wait(2)
-            loadstring(game:HttpGet("https://pastebin.com/raw/drAy7r0Y"))()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Badboy45099/Tite/refs/heads/main/WOLF.lua"))()
         ]])
     end
 end
