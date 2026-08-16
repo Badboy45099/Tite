@@ -79,7 +79,20 @@ function BrightnessSliderModule.Create(BrightnessTitle, UIS)
                 Knob.Position = UDim2.new(percent, 0, 0.5, 0)
                 BrightnessTitle:SetTitle("Brightness: " .. string.format("%.1f", newBrightness))
 
+                -- Update Direct Sunlight Brightness
                 Lighting.Brightness = newBrightness
+
+                -- Scale ambient light to illuminate shadowed and indoor areas
+                local ambientIntensity = math.clamp(percent * 255, 0, 255)
+                Lighting.Ambient = Color3.fromRGB(ambientIntensity, ambientIntensity, ambientIntensity)
+                Lighting.OutdoorAmbient = Color3.fromRGB(ambientIntensity, ambientIntensity, ambientIntensity)
+
+                -- Lift dark shadows entirely when brightness is high
+                if percent > 0.5 then
+                    Lighting.GlobalShadows = false
+                else
+                    Lighting.GlobalShadows = true
+                end
             end
         end
 
