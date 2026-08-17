@@ -290,7 +290,7 @@ local Window = Fluent:CreateWindow({
 })
 
 task.spawn(function()
-    task.wait(0.2)
+    task.wait(0.5)
     local ScreenGui = SafeParent:FindFirstChild("Fluent") or CoreGui:FindFirstChild("Fluent") or CoreGui:FindFirstChild("ScreenGui")
     if ScreenGui then
         ScreenGui.Name = "FluentUI_CustomMenu"
@@ -874,9 +874,17 @@ end
 local Camera = workspace.CurrentCamera
 local MAX_DISTANCE = 500 -- Cull players further than this distance (in studs)
 
+-- Localizing math & engine functions for max RenderStepped speed
+local abs, floor, clamp, atan2, deg = math.abs, math.floor, math.clamp, math.atan2, math.deg
+local Vector2New, Vector3New, UDim2New = Vector2.new, Vector3.new, UDim2.new
+local Color3RGB = Color3.fromRGB
+
+----------------------------------------------------
+-- ESP CONTAINER SETUP
+----------------------------------------------------
 local espGuiContainer = CoreGui:FindFirstChild("Full_ESP_Container")
 if not espGuiContainer then
-    local success, _ = pcall(function()
+    local success = pcall(function()
         espGuiContainer = Instance.new("ScreenGui")
         espGuiContainer.Name = "Full_ESP_Container"
         espGuiContainer.ResetOnSpawn = false
@@ -898,14 +906,22 @@ espFolder.Parent = CoreGui
 
 getgenv().WolfESPObjects = getgenv().WolfESPObjects or {}
 local activeESPObjects = getgenv().WolfESPObjects
-local playerConnections = {}
+
+----------------------------------------------------
+-- HELPER FUNCTIONS
+----------------------------------------------------
+local function hidePlayerDrawings(drawings)
+    if not drawings then return end
+    for name, drawObj in pairs(drawings) do
+        if name == "Highlight" then
+            drawObj.Enabled = false
+        elseif drawObj:IsA("GuiObject") then
+            drawObj.Visible = false
+        end
+    end
+end
 
 local function removePlayerESP(plr)
-    if playerConnections[plr] then
-        playerConnections[plr]:Disconnect()
-        playerConnections[plr] = nil
-    end
-
     if activeESPObjects[plr] then
         for _, obj in pairs(activeESPObjects[plr]) do
             pcall(function()
@@ -918,31 +934,24 @@ local function removePlayerESP(plr)
     end
 end
 
-local function hidePlayerESP(drawings)
-    if drawings.Highlight.Enabled then drawings.Highlight.Enabled = false end
-    if drawings.Box.Visible then drawings.Box.Visible = false end
-    if drawings.Line.Visible then drawings.Line.Visible = false end
-    if drawings.HealthBg.Visible then drawings.HealthBg.Visible = false end
-    if drawings.HealthMain.Visible then drawings.HealthMain.Visible = false end
-    if drawings.NameText.Visible then drawings.NameText.Visible = false end
-end
-
 local function createPlayerESP(plr)
     if plr == LocalPlayer then return end
     removePlayerESP(plr)
 
     local drawings = {}
 
+    -- 1. Highlight
     local highlight = Instance.new("Highlight")
     highlight.Name = plr.Name .. "_Highlight"
-    highlight.FillColor = Settings.HighlightColor or Color3.fromRGB(255, 0, 0)
+    highlight.FillColor = Settings.HighlightColor
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     highlight.FillTransparency = 0.5
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.OutlineColor = Color3RGB(255, 255, 255)
     highlight.Enabled = false
     highlight.Parent = espFolder
     drawings.Highlight = highlight
 
+    -- 2. Box
     local box = Instance.new("Frame")
     box.BackgroundTransparency = 1
     box.Visible = false
@@ -950,41 +959,45 @@ local function createPlayerESP(plr)
 
     local boxStroke = Instance.new("UIStroke")
     boxStroke.Thickness = 1.5
-    boxStroke.Color = Settings.BoxColor or Color3.fromRGB(255, 255, 255)
+    boxStroke.Color = Settings.BoxColor
     boxStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     boxStroke.Parent = box
     drawings.Box = box
     drawings.BoxStroke = boxStroke
 
+    -- 3. Line/Tracer
     local line = Instance.new("Frame")
-    line.AnchorPoint = Vector2.new(0.5, 0.5)
+    line.AnchorPoint = Vector2New(0.5, 0.5)
     line.BorderSizePixel = 0
-    line.BackgroundColor3 = Settings.TracerColor or Color3.fromRGB(255, 255, 255)
+    line.BackgroundColor3 = Settings.TracerColor
     line.Visible = false
     line.Parent = espGuiContainer
     drawings.Line = line
 
+    -- 4. Health Bar Background
     local healthBg = Instance.new("Frame")
     healthBg.BorderSizePixel = 0
-    healthBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    healthBg.BackgroundColor3 = Color3RGB(30, 30, 30)
     healthBg.Visible = false
     healthBg.Parent = espGuiContainer
     drawings.HealthBg = healthBg
 
+    -- 5. Health Bar Main
     local healthMain = Instance.new("Frame")
     healthMain.BorderSizePixel = 0
-    healthMain.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    healthMain.BackgroundColor3 = Color3RGB(0, 255, 0)
     healthMain.Visible = false
     healthMain.Parent = espGuiContainer
     drawings.HealthMain = healthMain
 
+    -- 6. Name Text Label
     local nameText = Instance.new("TextLabel")
     nameText.BackgroundTransparency = 1
     nameText.TextSize = 14
     nameText.Font = Enum.Font.SourceSansBold
-    nameText.TextColor3 = Settings.NameTagColor or Color3.fromRGB(255, 255, 255)
+    nameText.TextColor3 = Settings.NameTagColor
     nameText.TextStrokeTransparency = 0
-    nameText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    nameText.TextStrokeColor3 = Color3RGB(0, 0, 0)
     nameText.Visible = false
     nameText.Parent = espGuiContainer
     drawings.NameText = nameText
@@ -992,12 +1005,19 @@ local function createPlayerESP(plr)
     activeESPObjects[plr] = drawings
 end
 
+----------------------------------------------------
+-- MAIN RENDER LOOP
+----------------------------------------------------
 local function updateESPLoop()
     if getgenv().WolfESPLoop then return end
 
-    local renderConnection = RunService.RenderStepped:Connect(function()
+    getgenv().WolfESPLoop = RunService.RenderStepped:Connect(function()
         local selected = Settings.SelectedFeatures or {}
-        local camPos = Camera.CFrame.Position
+        local localChar = LocalPlayer.Character
+        local localHrp = localChar and localChar:FindFirstChild("HumanoidRootPart")
+        
+        if not localHrp then return end
+        local localPos = localHrp.Position
 
         for plr, drawings in pairs(activeESPObjects) do
             local char = plr.Character
@@ -1006,21 +1026,24 @@ local function updateESPLoop()
             local hum = char and char:FindFirstChildWhichIsA("Humanoid")
 
             if char and hrp and head and hum and hum.Health > 0 then
-                -- Distance check to save CPU time
-                local distanceToCam = (hrp.Position - camPos).Magnitude
-                if distanceToCam > MAX_DISTANCE then
-                    hidePlayerESP(drawings)
+                -- Distance Check
+                local distanceToPlayer = (hrp.Position - localPos).Magnitude
+                if distanceToPlayer > MAX_DISTANCE then
+                    hidePlayerDrawings(drawings)
                     continue
                 end
 
-                local topWorld = head.Position + Vector3.new(0, 0.5, 0)
-                local bottomWorld = hrp.Position - Vector3.new(0, 3.5, 0)
+                -- Define Top and Bottom 3D points
+                local topWorld = head.Position + Vector3New(0, 0.5, 0)
+                local bottomWorld = hrp.Position - Vector3New(0, 3.5, 0)
 
+                -- Convert to 2D Screen Space
                 local topPos, onScreenTop = Camera:WorldToViewportPoint(topWorld)
                 local bottomPos, onScreenBottom = Camera:WorldToViewportPoint(bottomWorld)
 
+                -- Check strictly if target is in front of camera and on screen
                 if onScreenTop and onScreenBottom and topPos.Z > 0 and bottomPos.Z > 0 then
-                    local height = math.abs(topPos.Y - bottomPos.Y)
+                    local height = abs(topPos.Y - bottomPos.Y)
                     local width = height / 1.8
                     local boxX = topPos.X - (width / 2)
                     local boxY = topPos.Y
@@ -1036,24 +1059,24 @@ local function updateESPLoop()
 
                     -- 2. Box
                     if selected["Box"] then
-                        drawings.Box.Size = UDim2.new(0, width, 0, height)
-                        drawings.Box.Position = UDim2.new(0, boxX, 0, boxY)
+                        drawings.Box.Size = UDim2New(0, width, 0, height)
+                        drawings.Box.Position = UDim2New(0, boxX, 0, boxY)
                         drawings.BoxStroke.Color = Settings.BoxColor
                         drawings.Box.Visible = true
                     else
                         drawings.Box.Visible = false
                     end
 
-                    -- 3. Ray Lines
+                    -- 3. Ray Lines / Tracing
                     if selected["Ray Lines"] then
-                        local startPos = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                        local targetPos = Vector2.new(bottomPos.X, bottomPos.Y)
+                        local startPos = Vector2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                        local targetPos = Vector2New(bottomPos.X, bottomPos.Y)
                         local lineDist = (targetPos - startPos).Magnitude
-                        local angle = math.atan2(targetPos.Y - startPos.Y, targetPos.X - startPos.X)
+                        local angle = atan2(targetPos.Y - startPos.Y, targetPos.X - startPos.X)
 
-                        drawings.Line.Size = UDim2.new(0, lineDist, 0, 2)
-                        drawings.Line.Position = UDim2.new(0, (startPos.X + targetPos.X) / 2, 0, (startPos.Y + targetPos.Y) / 2)
-                        drawings.Line.Rotation = math.deg(angle)
+                        drawings.Line.Size = UDim2New(0, lineDist, 0, 1.5)
+                        drawings.Line.Position = UDim2New(0, (startPos.X + targetPos.X) / 2, 0, (startPos.Y + targetPos.Y) / 2)
+                        drawings.Line.Rotation = deg(angle)
                         drawings.Line.BackgroundColor3 = Settings.TracerColor
                         drawings.Line.Visible = true
                     else
@@ -1063,18 +1086,18 @@ local function updateESPLoop()
                     -- 4. Health Bar
                     if selected["Health Bar"] then
                         local barWidth = 3
-                        local healthPercent = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
+                        local healthPercent = clamp(hum.Health / hum.MaxHealth, 0, 1)
                         local barHeight = height * healthPercent
 
-                        drawings.HealthBg.Size = UDim2.new(0, barWidth + 2, 0, height + 2)
-                        drawings.HealthBg.Position = UDim2.new(0, boxX - (barWidth + 4), 0, boxY - 1)
+                        drawings.HealthBg.Size = UDim2New(0, barWidth + 2, 0, height + 2)
+                        drawings.HealthBg.Position = UDim2New(0, boxX - (barWidth + 4), 0, boxY - 1)
                         drawings.HealthBg.Visible = true
 
-                        drawings.HealthMain.Size = UDim2.new(0, barWidth, 0, barHeight)
-                        drawings.HealthMain.Position = UDim2.new(0, boxX - (barWidth + 3), 0, boxY + (height - barHeight))
-                        drawings.HealthMain.BackgroundColor3 = Color3.fromRGB(
-                            math.floor(255 * (1 - healthPercent)),
-                            math.floor(255 * healthPercent),
+                        drawings.HealthMain.Size = UDim2New(0, barWidth, 0, barHeight)
+                        drawings.HealthMain.Position = UDim2New(0, boxX - (barWidth + 3), 0, boxY + (height - barHeight))
+                        drawings.HealthMain.BackgroundColor3 = Color3RGB(
+                            floor(255 * (1 - healthPercent)),
+                            floor(255 * healthPercent),
                             0
                         )
                         drawings.HealthMain.Visible = true
@@ -1086,25 +1109,26 @@ local function updateESPLoop()
                     -- 5. Name Tag
                     if selected["Name Tag"] then
                         drawings.NameText.Text = plr.DisplayName .. " (@" .. plr.Name .. ")"
-                        drawings.NameText.Size = UDim2.new(0, 200, 0, 18)
-                        drawings.NameText.Position = UDim2.new(0, topPos.X - 100, 0, boxY - 20)
+                        drawings.NameText.Size = UDim2New(0, 200, 0, 18)
+                        drawings.NameText.Position = UDim2New(0, topPos.X - 100, 0, boxY - 20)
                         drawings.NameText.TextColor3 = Settings.NameTagColor
                         drawings.NameText.Visible = true
                     else
                         drawings.NameText.Visible = false
                     end
                 else
-                    hidePlayerESP(drawings)
+                    hidePlayerDrawings(drawings)
                 end
             else
-                hidePlayerESP(drawings)
+                hidePlayerDrawings(drawings)
             end
         end
     end)
-
-    getgenv().WolfESPLoop = renderConnection
 end
 
+----------------------------------------------------
+-- SETUP ESP TRACKING
+----------------------------------------------------
 local function setupESP()
     local function trackPlayer(plr)
         if plr == LocalPlayer then return end
@@ -1113,7 +1137,7 @@ local function setupESP()
             createPlayerESP(plr)
         end
 
-        playerConnections[plr] = plr.CharacterAdded:Connect(function()
+        plr.CharacterAdded:Connect(function()
             task.wait(0.2)
             createPlayerESP(plr)
         end)
@@ -1130,6 +1154,42 @@ local function setupESP()
 end
 
 setupESP()
+
+----------------------------------------------------
+-- VISION TAB UI
+----------------------------------------------------
+local MultiSelect = Tabs.Vision:AddDropdown("ESP", {
+    Title = "Select ESP Features",
+    Values = {"Highlight Player", "Box", "Ray Lines", "Health Bar", "Name Tag"},
+    Multi = true,
+    Default = Settings.SelectedFeatures
+})
+
+MultiSelect:OnChanged(function(Value)
+    Settings.SelectedFeatures = Value
+    saveConfig()
+end)
+
+local HighlightColorPicker = Tabs.Vision:AddColorpicker("HighlightColorPicker", {
+    Title = "Highlight Color",
+    Default = Settings.HighlightColor
+})
+
+HighlightColorPicker:OnChanged(function(Value)
+    Settings.HighlightColor = Value
+    saveConfig()
+end)
+
+local BoxColorPicker = Tabs.Vision:AddColorpicker("BoxColorPicker", {
+    Title = "Box & Line Color",
+    Default = Settings.BoxColor
+})
+
+BoxColorPicker:OnChanged(function(Value)
+    Settings.BoxColor = Value
+    Settings.TracerColor = Value
+    saveConfig()
+end)
 
 ----------------------------------------------------
 -- BRIGHTNESS SLIDER
