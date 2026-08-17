@@ -9,7 +9,15 @@ local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local TeleportService = game:GetService("TeleportService")
 
-local LocalPlayer = Players.LocalPlayer
+local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
+
+----------------------------------------------------
+-- ANTI-DUPLICATION CHECK
+----------------------------------------------------
+if getgenv().AutoLoadInitialized then
+    return
+end
+getgenv().AutoLoadInitialized = true
 
 ----------------------------------------------------
 -- HIDDEN / PROTECTED GUI CONTAINER (ANTI-DETECTION)
@@ -29,45 +37,40 @@ end
 
 local SafeParent = GetSafeGuiParent()
 
--- Anti-Ban & Kick
-if LocalPlayer and LocalPlayer.Kick then
+----------------------------------------------------
+-- SAFE HOOKS & METATABLE PROTECTION
+----------------------------------------------------
+-- Anti-Kick Hooking
+if LocalPlayer and typeof(hookfunction) == "function" then
     pcall(function()
         local oldKick
         oldKick = hookfunction(LocalPlayer.Kick, function(self, reason)
             if self == LocalPlayer then
-                return nil -- Silently blocks local game scripts from kicking you (Error 267)
+                return nil
             end
             return oldKick(self, reason)
         end)
     end)
 end
 
--- Safely drops background telemetry/ban report logs sent by game scripts
-pcall(function()
-    local mt = getrawmetatable(game)
-    local oldNamecall = mt.__namecall
-    setreadonly(mt, false)
-
-    mt.__namecall = newcclosure(function(self, ...)
-        local method = getnamecallmethod()
-        
-        if tostring(method) == "FireServer" or tostring(method) == "InvokeServer" then
-            local name = tostring(self.Name):lower()
-            if name:find("cheat") or name:find("detection") or name:find("report") or name:find("kick") or name:find("telemetry") or name:find("check") then
-                return nil -- Drops the data report so the server never flags you
+-- Telemetry & Report Filtering via hookmetamethod (Prevents Crashes)
+if typeof(hookmetamethod) == "function" then
+    pcall(function()
+        local oldNamecall
+        oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+            local method = getnamecallmethod()
+            
+            if method == "FireServer" or method == "InvokeServer" then
+                local name = tostring(self.Name):lower()
+                if name:find("cheat") or name:find("detection") or name:find("report") or name:find("kick") or name:find("telemetry") or name:find("check") then
+                    return nil
+                end
             end
-        end
-        
-        return oldNamecall(self, ...)
+            
+            return oldNamecall(self, ...)
+        end))
     end)
-    setreadonly(mt, true)
-end)
-
--- Prevent duplicate script executions on the same place
-if getgenv().AutoLoadInitialized then
-    return
 end
-getgenv().AutoLoadInitialized = true
 
 ----------------------------------------------------
 -- AUTO-EXECUTE TELEPORT QUEUE
@@ -75,7 +78,7 @@ getgenv().AutoLoadInitialized = true
 local function SetupAutoExecuteOnTeleport()
     local queueFunction = queue_on_teleport or (syn and syn.queue_on_teleport) or queueonteleport
     if queueFunction then
-        queueFunction([[
+        pcall(queueFunction, [[
             repeat task.wait() until game:IsLoaded()
             task.wait(2)
             loadstring(game:HttpGet("https://raw.githubusercontent.com/Badboy45099/Tite/refs/heads/main/WOLF.lua"))()
@@ -89,71 +92,87 @@ TeleportService.TeleportInitFailed:Connect(SetupAutoExecuteOnTeleport)
 ----------------------------------------------------
 -- CLEANUP EXISTING GUI ELEMENTS & CONNECTIONS  
 ----------------------------------------------------
-if CoreGui:FindFirstChild("FluentUI_CustomMenu") then CoreGui:FindFirstChild("FluentUI_CustomMenu"):Destroy() end
-if CoreGui:FindFirstChild("WolfMenuToggle") then CoreGui:FindFirstChild("WolfMenuToggle"):Destroy() end
- 
-if getgenv().WolfFreecamConns then
-    for _, conn in ipairs(getgenv().WolfFreecamConns) do conn:Disconnect() end
-    table.clear(getgenv().WolfFreecamConns)
-else
-    getgenv().WolfFreecamConns = {}
+local function SafeDestroy(instance)
+    if instance and instance.Parent then
+        instance:Destroy()
+    end
 end
- 
+
+SafeDestroy(SafeParent:FindFirstChild("FluentUI_CustomMenu"))
+SafeDestroy(CoreGui:FindFirstChild("FluentUI_CustomMenu"))
+SafeDestroy(SafeParent:FindFirstChild("WolfMenuToggle"))
+SafeDestroy(CoreGui:FindFirstChild("WolfMenuToggle"))
+
+-- Disconnect connections safely
+local function CleanConnections(tab)
+    if tab then
+        for _, conn in ipairs(tab) do
+            if typeof(conn) == "RBXScriptConnection" and conn.Connected then
+                conn:Disconnect()
+            end
+        end
+        table.clear(tab)
+    end
+end
+
+if getgenv().WolfFreecamConns then CleanConnections(getgenv().WolfFreecamConns) else getgenv().WolfFreecamConns = {} end
+if getgenv().WolfXRayConns then CleanConnections(getgenv().WolfXRayConns) else getgenv().WolfXRayConns = {} end
+
 if getgenv().WolfFreecamActive then
     getgenv().WolfFreecamActive = false
-    local cam = workspace.CurrentCamera
+    local cam = Workspace.CurrentCamera
     if cam then cam.CameraType = Enum.CameraType.Custom end
     if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
         LocalPlayer.Character.HumanoidRootPart.Anchored = false
     end
     UIS.MouseBehavior = Enum.MouseBehavior.Default
 end
- 
-if getgenv().WolfXRayConns then
-    for _, conn in ipairs(getgenv().WolfXRayConns) do conn:Disconnect() end
-    table.clear(getgenv().WolfXRayConns)
-else
-    getgenv().WolfXRayConns = {}
-end
- 
+
 if getgenv().WolfInfJumpConn then getgenv().WolfInfJumpConn:Disconnect() getgenv().WolfInfJumpConn = nil end
 if getgenv().WolfNoclipConn then getgenv().WolfNoclipConn:Disconnect() getgenv().WolfNoclipConn = nil end
 if getgenv().WolfNoclipDescendantConn then getgenv().WolfNoclipDescendantConn:Disconnect() getgenv().WolfNoclipDescendantConn = nil end
- 
+
 if getgenv().WolfFlyActive then getgenv().WolfFlyActive = false end
 if getgenv().WolfFlyKeyDownConn then getgenv().WolfFlyKeyDownConn:Disconnect() getgenv().WolfFlyKeyDownConn = nil end
 if getgenv().WolfFlyKeyUpConn then getgenv().WolfFlyKeyUpConn:Disconnect() getgenv().WolfFlyKeyUpConn = nil end
- 
+
 if LocalPlayer.Character then
     local torso = LocalPlayer.Character:FindFirstChild("UpperTorso") or LocalPlayer.Character:FindFirstChild("Torso")
     if torso then
         for _, obj in ipairs(torso:GetChildren()) do
-            if obj:IsA("BodyGyro") or obj:IsA("BodyVelocity") then obj:Destroy() end
+            if obj:IsA("BodyGyro") or obj:IsA("BodyVelocity") then 
+                obj:Destroy() 
+            end
         end
     end
     local hum = LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
     if hum then hum.PlatformStand = false end
 end
- 
-if getgenv().WolfTpGui then getgenv().WolfTpGui:Destroy() getgenv().WolfTpGui = nil end
+
+if getgenv().WolfTpGui then SafeDestroy(getgenv().WolfTpGui) getgenv().WolfTpGui = nil end
 if getgenv().WolfSeatHeartbeat then getgenv().WolfSeatHeartbeat:Disconnect() getgenv().WolfSeatHeartbeat = nil end
-if CoreGui:FindFirstChild("Full_ESP_Folder") then CoreGui:FindFirstChild("Full_ESP_Folder"):Destroy() end
+SafeDestroy(CoreGui:FindFirstChild("Full_ESP_Folder"))
 if getgenv().WolfESPLoop then getgenv().WolfESPLoop:Disconnect() getgenv().WolfESPLoop = nil end
- 
+
 if getgenv().WolfESPObjects then
     pcall(function()
-        for plr, drawings in pairs(getgenv().WolfESPObjects) do
+        for _, drawings in pairs(getgenv().WolfESPObjects) do
             for _, obj in pairs(drawings) do
-                if typeof(obj) == "Instance" then obj:Destroy()
-                elseif typeof(obj) == "table" and obj.Remove then obj:Remove() end
+                if typeof(obj) == "Instance" then 
+                    obj:Destroy()
+                elseif typeof(obj) == "table" and obj.Remove then 
+                    obj:Remove() 
+                end
             end
         end
     end)
     table.clear(getgenv().WolfESPObjects)
 end
- 
+
 for _, child in ipairs(Lighting:GetChildren()) do
-    if child:IsA("DepthOfFieldEffect") or child.Name:find("Blur") or child.Name:find("Acrylic") then child:Destroy() end
+    if child:IsA("DepthOfFieldEffect") or child.Name:find("Blur") or child.Name:find("Acrylic") then 
+        child:Destroy() 
+    end
 end
 
 ----------------------------------------------------
@@ -202,7 +221,7 @@ local Settings = {
 local function encodeSettings(tbl)
     local copy = {}
     for k, v in pairs(tbl) do
-        if type(v) == "userdata" and typeof(v) == "Color3" then
+        if typeof(v) == "Color3" then
             copy[k] = {R = v.R, G = v.G, B = v.B}
         elseif type(v) == "table" then
             copy[k] = encodeSettings(v)
@@ -251,7 +270,14 @@ loadConfig()
 ----------------------------------------------------
 -- LOAD FLUENT LIBRARIES
 ----------------------------------------------------
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local FluentSuccess, Fluent = pcall(function()
+    return loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+end)
+
+if not FluentSuccess or not Fluent then
+    warn("Failed to load Fluent UI library.")
+    return
+end
 
 local Window = Fluent:CreateWindow({
     Title = "WOLF Tools 🐺",
@@ -265,7 +291,7 @@ local Window = Fluent:CreateWindow({
 
 task.spawn(function()
     task.wait(0.2)
-    local ScreenGui = CoreGui:FindFirstChild("Fluent") or CoreGui:FindFirstChild("ScreenGui")
+    local ScreenGui = SafeParent:FindFirstChild("Fluent") or CoreGui:FindFirstChild("Fluent") or CoreGui:FindFirstChild("ScreenGui")
     if ScreenGui then
         ScreenGui.Name = "FluentUI_CustomMenu"
         
@@ -293,7 +319,7 @@ getgenv().Tabs = Tabs
 local ToggleGui = Instance.new("ScreenGui")
 ToggleGui.Name = "WolfMenuToggle"
 ToggleGui.ResetOnSpawn = false
-ToggleGui.Parent = CoreGui
+ToggleGui.Parent = SafeParent
 
 local ToggleButton = Instance.new("ImageButton")
 ToggleButton.Name = "WolfIconBtn"
@@ -387,7 +413,7 @@ if Settings.InfiniteJump then applyInfJumpState(true) end
 -- WALKSPEED DISPLAY & MODULE
 ----------------------------------------------------
 local successModule, WalkSpeedSliderModule = pcall(function()
-    return loadstring(game:HttpGet("https://pastebin.com/raw/bZiCG1G9"))()
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/Badboy45099/Tite/refs/heads/main/PLAYER/Walkspeed.lua"))()
 end)
 
 local SpeedTitle = Tabs.Player:AddParagraph({
