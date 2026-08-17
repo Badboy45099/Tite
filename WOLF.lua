@@ -488,17 +488,13 @@ local LocalPlayer = Players.LocalPlayer
 
 local flySpeed = 50
 local maxFlySpeed = 500
+local hoverHeight = 2
+local hoverSpeed = 3
 
--- Levitation settings (adjust if you want bigger/faster float)
-local hoverHeight = 2 -- How high up and down it floats
-local hoverSpeed = 3    -- How fast it floats up and down
-
--- Lerp helper for smooth number blending
 local function lerp(a, b, t)
     return a + (b - a) * t
 end
 
--- Safe C0 setter to prevent read-only crashes in RenderStepped
 local function safeSetC0(joint, cframe)
     if joint then
         pcall(function()
@@ -514,15 +510,32 @@ local function startFlying()
     task.spawn(function()
         local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
         local hum = char:WaitForChild("Humanoid", 5)
-        if not hum then return end
+        if not hum or hum.Health <= 0 then 
+            getgenv().WolfFlyActive = false 
+            return 
+        end
 
-        local torso = hum.RigType == Enum.HumanoidRigType.R15 and char:WaitForChild("UpperTorso", 5) or char:WaitForChild("Torso", 5)
-        if not torso then return end
+        local torso = (hum.RigType == Enum.HumanoidRigType.R15) 
+            and char:WaitForChild("UpperTorso", 5) 
+            or char:WaitForChild("Torso", 5)
+            
+        if not torso then 
+            getgenv().WolfFlyActive = false 
+            return 
+        end
+
+        -- CACHE JOINTS OUTSIDE OF RENDERSTEPPED TO PREVENT LAG
+        local isR15 = (hum.RigType == Enum.HumanoidRigType.R15)
+        local shoulderL = isR15 and char:FindFirstChild("LeftShoulder", true) or torso:FindFirstChild("Left Shoulder")
+        local shoulderR = isR15 and char:FindFirstChild("RightShoulder", true) or torso:FindFirstChild("Right Shoulder")
 
         local camera = workspace.CurrentCamera
         local currentSpeed = flySpeed
 
-        -- Create BodyGyro & BodyVelocity for rigid control
+        -- Clean up pre-existing physical body instances
+        if torso:FindFirstChild("WolfFlyGyro") then torso.WolfFlyGyro:Destroy() end
+        if torso:FindFirstChild("WolfFlyVelocity") then torso.WolfFlyVelocity:Destroy() end
+
         local bg = Instance.new("BodyGyro")
         bg.Name = "WolfFlyGyro"
         bg.P = 15000
@@ -539,9 +552,15 @@ local function startFlying()
         hum:ChangeState(Enum.HumanoidStateType.Physics)
         hum.PlatformStand = true
 
-        -- Animation Blend States
         local flyProgress = 0
 
+        -- DISCONNECT OLD LOOP BEFORE CREATING A NEW ONE
+        if getgenv().WolfFlyLoop then
+            getgenv().WolfFlyLoop:Disconnect()
+            getgenv().WolfFlyLoop = nil
+        end
+
+        -- RenderStepped handles motion updates; NO task.wait() inside here!
         getgenv().WolfFlyLoop = RunService.RenderStepped:Connect(function(deltaTime)
             if not getgenv().WolfFlyActive or not char or not char.Parent or not hum or hum.Health <= 0 then
                 if getgenv().WolfFlyLoop then
@@ -554,7 +573,6 @@ local function startFlying()
             local moveDir = hum.MoveDirection
             local isMoving = moveDir.Magnitude > 0
 
-            -- Smoothly interpolate state transitions
             if isMoving then
                 flyProgress = math.min(1, flyProgress + deltaTime * 6)
                 currentSpeed = math.min(maxFlySpeed, currentSpeed + 0.8)
@@ -567,18 +585,11 @@ local function startFlying()
             -- SMOOTH ARM ANIMATION
             ----------------------------------------------------
             local armAngle = lerp(0, 180, flyProgress)
-            
-            if hum.RigType == Enum.HumanoidRigType.R15 then
-                local shoulderL = char:FindFirstChild("LeftShoulder", true)
-                local shoulderR = char:FindFirstChild("RightShoulder", true)
-                safeSetC0(shoulderL, CFrame.new(-1, 0.5, 0) * CFrame.Angles(math.rad(armAngle), 0, 0))
-                safeSetC0(shoulderR, CFrame.new(1, 0.5, 0) * CFrame.Angles(math.rad(armAngle), 0, 0))
-            else
-                local shoulderL = torso:FindFirstChild("Left Shoulder")
-                local shoulderR = torso:FindFirstChild("Right Shoulder")
-                safeSetC0(shoulderL, CFrame.new(-1.5, 0.5, 0) * CFrame.Angles(math.rad(armAngle), 0, 0))
-                safeSetC0(shoulderR, CFrame.new(1.5, 0.5, 0) * CFrame.Angles(math.rad(armAngle), 0, 0))
-            end
+            local offsetL = isR15 and CFrame.new(-1, 0.5, 0) or CFrame.new(-1.5, 0.5, 0)
+            local offsetR = isR15 and CFrame.new(1, 0.5, 0) or CFrame.new(1.5, 0.5, 0)
+
+            safeSetC0(shoulderL, offsetL * CFrame.Angles(math.rad(armAngle), 0, 0))
+            safeSetC0(shoulderR, offsetR * CFrame.Angles(math.rad(armAngle), 0, 0))
 
             ----------------------------------------------------
             -- MOVEMENT, ROTATION & LEVITATION (IDLE HOVER)
@@ -586,16 +597,11 @@ local function startFlying()
             local camCF = camera.CFrame
             
             if isMoving then
-                local lookVec = camCF.LookVector
-                local rightVec = camCF.RightVector
-                
                 local forwardBackward = moveDir:Dot(camCF.LookVector)
                 local leftRight = moveDir:Dot(camCF.RightVector)
-                
-                local velocityVector = (lookVec * forwardBackward) + (rightVec * leftRight)
+                local velocityVector = (camCF.LookVector * forwardBackward) + (camCF.RightVector * leftRight)
                 bv.velocity = velocityVector * currentSpeed
             else
-                -- Calculate smooth sine wave for floating effect when standing still
                 local hoverOffset = math.sin(os.clock() * hoverSpeed) * hoverHeight
                 bv.velocity = Vector3.new(0, hoverOffset, 0)
             end
@@ -619,19 +625,13 @@ local function stopFlying()
         local hum = char:FindFirstChildWhichIsA("Humanoid")
         local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
 
-        -- Restore original arm joints safely
         if hum and torso then
-            if hum.RigType == Enum.HumanoidRigType.R15 then
-                local shoulderL = char:FindFirstChild("LeftShoulder", true)
-                local shoulderR = char:FindFirstChild("RightShoulder", true)
-                safeSetC0(shoulderL, CFrame.new(-1, 0.5, 0))
-                safeSetC0(shoulderR, CFrame.new(1, 0.5, 0))
-            else
-                local shoulderL = torso:FindFirstChild("Left Shoulder")
-                local shoulderR = torso:FindFirstChild("Right Shoulder")
-                safeSetC0(shoulderL, CFrame.new(-1.5, 0.5, 0))
-                safeSetC0(shoulderR, CFrame.new(1.5, 0.5, 0))
-            end
+            local isR15 = (hum.RigType == Enum.HumanoidRigType.R15)
+            local shoulderL = isR15 and char:FindFirstChild("LeftShoulder", true) or torso:FindFirstChild("Left Shoulder")
+            local shoulderR = isR15 and char:FindFirstChild("RightShoulder", true) or torso:FindFirstChild("Right Shoulder")
+
+            safeSetC0(shoulderL, isR15 and CFrame.new(-1, 0.5, 0) or CFrame.new(-1.5, 0.5, 0))
+            safeSetC0(shoulderR, isR15 and CFrame.new(1, 0.5, 0) or CFrame.new(1.5, 0.5, 0))
             
             if torso:FindFirstChild("WolfFlyGyro") then torso.WolfFlyGyro:Destroy() end
             if torso:FindFirstChild("WolfFlyVelocity") then torso.WolfFlyVelocity:Destroy() end
@@ -670,9 +670,10 @@ FlySpeedSlider:OnChanged(function(val)
     flySpeed = val
 end)
 
+-- AUTO-RESET TOGGLE ON RESPAWN
 LocalPlayer.CharacterAdded:Connect(function()
-    if getgenv().WolfFlyActive then
-        stopFlying()
+    stopFlying()
+    if FlyToggle then
         FlyToggle:SetValue(false)
     end
 end)
@@ -868,23 +869,25 @@ if successModule and type(TeleportModule) == "table" and TeleportModule.Create t
 end
 
 ----------------------------------------------------
--- ESP SYSTEM
+-- OPTIMIZED ESP SYSTEM
 ----------------------------------------------------
 local Camera = workspace.CurrentCamera
+local MAX_DISTANCE = 500 -- Cull players further than this distance (in studs)
+
 local espGuiContainer = CoreGui:FindFirstChild("Full_ESP_Container")
 if not espGuiContainer then
     local success, _ = pcall(function()
         espGuiContainer = Instance.new("ScreenGui")
         espGuiContainer.Name = "Full_ESP_Container"
         espGuiContainer.ResetOnSpawn = false
-        espGuiContainer.IgnoreGuiInset = true -- THIS FIXES THE DOWNWARD OFFSET
+        espGuiContainer.IgnoreGuiInset = true
         espGuiContainer.Parent = CoreGui
     end)
     if not success then
         espGuiContainer = Instance.new("ScreenGui")
         espGuiContainer.Name = "Full_ESP_Container"
         espGuiContainer.ResetOnSpawn = false
-        espGuiContainer.IgnoreGuiInset = true -- THIS FIXES THE DOWNWARD OFFSET
+        espGuiContainer.IgnoreGuiInset = true
         espGuiContainer.Parent = LocalPlayer:WaitForChild("PlayerGui")
     end
 end
@@ -895,9 +898,14 @@ espFolder.Parent = CoreGui
 
 getgenv().WolfESPObjects = getgenv().WolfESPObjects or {}
 local activeESPObjects = getgenv().WolfESPObjects
-local renderConnection = nil
+local playerConnections = {}
 
 local function removePlayerESP(plr)
+    if playerConnections[plr] then
+        playerConnections[plr]:Disconnect()
+        playerConnections[plr] = nil
+    end
+
     if activeESPObjects[plr] then
         for _, obj in pairs(activeESPObjects[plr]) do
             pcall(function()
@@ -910,16 +918,24 @@ local function removePlayerESP(plr)
     end
 end
 
+local function hidePlayerESP(drawings)
+    if drawings.Highlight.Enabled then drawings.Highlight.Enabled = false end
+    if drawings.Box.Visible then drawings.Box.Visible = false end
+    if drawings.Line.Visible then drawings.Line.Visible = false end
+    if drawings.HealthBg.Visible then drawings.HealthBg.Visible = false end
+    if drawings.HealthMain.Visible then drawings.HealthMain.Visible = false end
+    if drawings.NameText.Visible then drawings.NameText.Visible = false end
+end
+
 local function createPlayerESP(plr)
     if plr == LocalPlayer then return end
     removePlayerESP(plr)
 
     local drawings = {}
 
-    -- 1. Highlight (Roblox Native)
     local highlight = Instance.new("Highlight")
     highlight.Name = plr.Name .. "_Highlight"
-    highlight.FillColor = Settings.HighlightColor
+    highlight.FillColor = Settings.HighlightColor or Color3.fromRGB(255, 0, 0)
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     highlight.FillTransparency = 0.5
     highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
@@ -927,7 +943,6 @@ local function createPlayerESP(plr)
     highlight.Parent = espFolder
     drawings.Highlight = highlight
 
-    -- 2. Box (Gui Frame with UIStroke)
     local box = Instance.new("Frame")
     box.BackgroundTransparency = 1
     box.Visible = false
@@ -935,22 +950,20 @@ local function createPlayerESP(plr)
 
     local boxStroke = Instance.new("UIStroke")
     boxStroke.Thickness = 1.5
-    boxStroke.Color = Settings.BoxColor
+    boxStroke.Color = Settings.BoxColor or Color3.fromRGB(255, 255, 255)
     boxStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     boxStroke.Parent = box
     drawings.Box = box
     drawings.BoxStroke = boxStroke
 
-    -- 3. Line/Tracer (Gui Frame acting as line)
     local line = Instance.new("Frame")
     line.AnchorPoint = Vector2.new(0.5, 0.5)
     line.BorderSizePixel = 0
-    line.BackgroundColor3 = Settings.TracerColor
+    line.BackgroundColor3 = Settings.TracerColor or Color3.fromRGB(255, 255, 255)
     line.Visible = false
     line.Parent = espGuiContainer
     drawings.Line = line
 
-    -- 4. Health Bar Background
     local healthBg = Instance.new("Frame")
     healthBg.BorderSizePixel = 0
     healthBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
@@ -958,7 +971,6 @@ local function createPlayerESP(plr)
     healthBg.Parent = espGuiContainer
     drawings.HealthBg = healthBg
 
-    -- 5. Health Bar Main
     local healthMain = Instance.new("Frame")
     healthMain.BorderSizePixel = 0
     healthMain.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
@@ -966,12 +978,11 @@ local function createPlayerESP(plr)
     healthMain.Parent = espGuiContainer
     drawings.HealthMain = healthMain
 
-    -- 6. Name Text Label
     local nameText = Instance.new("TextLabel")
     nameText.BackgroundTransparency = 1
     nameText.TextSize = 14
     nameText.Font = Enum.Font.SourceSansBold
-    nameText.TextColor3 = Settings.NameTagColor
+    nameText.TextColor3 = Settings.NameTagColor or Color3.fromRGB(255, 255, 255)
     nameText.TextStrokeTransparency = 0
     nameText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     nameText.Visible = false
@@ -982,10 +993,11 @@ local function createPlayerESP(plr)
 end
 
 local function updateESPLoop()
-    if renderConnection then return end
+    if getgenv().WolfESPLoop then return end
 
-    renderConnection = RunService.RenderStepped:Connect(function()
+    local renderConnection = RunService.RenderStepped:Connect(function()
         local selected = Settings.SelectedFeatures or {}
+        local camPos = Camera.CFrame.Position
 
         for plr, drawings in pairs(activeESPObjects) do
             local char = plr.Character
@@ -994,19 +1006,22 @@ local function updateESPLoop()
             local hum = char and char:FindFirstChildWhichIsA("Humanoid")
 
             if char and hrp and head and hum and hum.Health > 0 then
-                -- Define Top (just above head) and Bottom (at feet) in 3D space
+                -- Distance check to save CPU time
+                local distanceToCam = (hrp.Position - camPos).Magnitude
+                if distanceToCam > MAX_DISTANCE then
+                    hidePlayerESP(drawings)
+                    continue
+                end
+
                 local topWorld = head.Position + Vector3.new(0, 0.5, 0)
                 local bottomWorld = hrp.Position - Vector3.new(0, 3.5, 0)
 
-                -- Convert to 2D Screen Space
                 local topPos, onScreenTop = Camera:WorldToViewportPoint(topWorld)
                 local bottomPos, onScreenBottom = Camera:WorldToViewportPoint(bottomWorld)
 
-                if onScreenTop or onScreenBottom then
-                    -- Calculate precise Height and Width for the 2D Box
+                if onScreenTop and onScreenBottom and topPos.Z > 0 and bottomPos.Z > 0 then
                     local height = math.abs(topPos.Y - bottomPos.Y)
-                    local width = height / 1.8 -- 1.8 is the standard Roblox avatar ratio
-                    
+                    local width = height / 1.8
                     local boxX = topPos.X - (width / 2)
                     local boxY = topPos.Y
 
@@ -1029,14 +1044,14 @@ local function updateESPLoop()
                         drawings.Box.Visible = false
                     end
 
-                    -- 3. Ray Lines / Tracing
+                    -- 3. Ray Lines
                     if selected["Ray Lines"] then
                         local startPos = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                        local targetPos = Vector2.new(bottomPos.X, bottomPos.Y) -- Tracers point to feet
-                        local distance = (targetPos - startPos).Magnitude
+                        local targetPos = Vector2.new(bottomPos.X, bottomPos.Y)
+                        local lineDist = (targetPos - startPos).Magnitude
                         local angle = math.atan2(targetPos.Y - startPos.Y, targetPos.X - startPos.X)
 
-                        drawings.Line.Size = UDim2.new(0, distance, 0, 1.5)
+                        drawings.Line.Size = UDim2.new(0, lineDist, 0, 2)
                         drawings.Line.Position = UDim2.new(0, (startPos.X + targetPos.X) / 2, 0, (startPos.Y + targetPos.Y) / 2)
                         drawings.Line.Rotation = math.deg(angle)
                         drawings.Line.BackgroundColor3 = Settings.TracerColor
@@ -1079,22 +1094,10 @@ local function updateESPLoop()
                         drawings.NameText.Visible = false
                     end
                 else
-                    for name, drawObj in pairs(drawings) do
-                        if name == "Highlight" then
-                            drawObj.Enabled = false
-                        elseif drawObj:IsA("GuiObject") then
-                            drawObj.Visible = false
-                        end
-                    end
+                    hidePlayerESP(drawings)
                 end
             else
-                for name, drawObj in pairs(drawings) do
-                    if name == "Highlight" then
-                        drawObj.Enabled = false
-                    elseif drawObj:IsA("GuiObject") then
-                        drawObj.Visible = false
-                    end
-                end
+                hidePlayerESP(drawings)
             end
         end
     end)
@@ -1110,7 +1113,7 @@ local function setupESP()
             createPlayerESP(plr)
         end
 
-        plr.CharacterAdded:Connect(function()
+        playerConnections[plr] = plr.CharacterAdded:Connect(function()
             task.wait(0.2)
             createPlayerESP(plr)
         end)
@@ -1127,42 +1130,6 @@ local function setupESP()
 end
 
 setupESP()
-
-----------------------------------------------------
--- VISION TAB UI
-----------------------------------------------------
-local MultiSelect = Tabs.Vision:AddDropdown("ESP", {
-    Title = "Select ESP Features",
-    Values = {"Highlight Player", "Box", "Ray Lines", "Health Bar", "Name Tag"},
-    Multi = true,
-    Default = Settings.SelectedFeatures
-})
-
-MultiSelect:OnChanged(function(Value)
-    Settings.SelectedFeatures = Value
-    saveConfig()
-end)
-
-local HighlightColorPicker = Tabs.Vision:AddColorpicker("HighlightColorPicker", {
-    Title = "Highlight Color",
-    Default = Settings.HighlightColor
-})
-
-HighlightColorPicker:OnChanged(function(Value)
-    Settings.HighlightColor = Value
-    saveConfig()
-end)
-
-local BoxColorPicker = Tabs.Vision:AddColorpicker("BoxColorPicker", {
-    Title = "Box & Line Color",
-    Default = Settings.BoxColor
-})
-
-BoxColorPicker:OnChanged(function(Value)
-    Settings.BoxColor = Value
-    Settings.TracerColor = Value
-    saveConfig()
-end)
 
 ----------------------------------------------------
 -- BRIGHTNESS SLIDER
