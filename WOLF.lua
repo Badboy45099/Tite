@@ -8,6 +8,7 @@ local HttpService = game:GetService("HttpService")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local TeleportService = game:GetService("TeleportService")
+local Debris = game:GetService("Debris")
 
 local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 
@@ -272,6 +273,15 @@ loadConfig()
 ----------------------------------------------------
 -- LOAD FLUENT LIBRARIES
 ----------------------------------------------------
+local StartupSound = Instance.new("Sound")
+StartupSound.SoundId = "rbxassetid://122628036520839"
+StartupSound.Volume = 0.6
+StartupSound.PlayOnRemove = false
+StartupSound.Parent = game:GetService("SoundService")
+
+StartupSound:Play()
+Debris:AddItem(StartupSound, 3)
+
 local FluentSuccess, Fluent = pcall(function()
     return loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 end)
