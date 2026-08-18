@@ -67,8 +67,8 @@ function ScriptManager.Execute(code, scriptName, Fluent)
     end)
 end
 
--- Complete UI Builder with Self-Cleaning Yes/No Confirm Popup
-function ScriptManager.BuildUI(Tab, Fluent)
+-- UI Builder with Interactive Window Dialog Buttons
+function ScriptManager.BuildUI(Tab, Fluent, Window)
     local SavedScripts = ScriptManager.Load()
     local InputName = ""
     local InputUrl = ""
@@ -101,7 +101,7 @@ function ScriptManager.BuildUI(Tab, Fluent)
         return names
     end
 
-    -- Save Script Handler
+    -- Save Button
     Tab:AddButton({
         Title = "Save Script Entry",
         Icon = "save",
@@ -113,7 +113,7 @@ function ScriptManager.BuildUI(Tab, Fluent)
 
             SavedScripts[InputName] = InputUrl
             ScriptManager.Save(SavedScripts)
-            
+
             if ScriptDropdown then
                 ScriptDropdown:SetValues(GetScriptNames())
             end
@@ -151,18 +151,7 @@ function ScriptManager.BuildUI(Tab, Fluent)
         end
     })
 
-    -- Popup Confirmation Mechanics
-    local PopupElements = {}
-
-    local function ClearPopup()
-        for _, elem in ipairs(PopupElements) do
-            if type(elem) == "table" and elem.Destroy then
-                pcall(function() elem:Destroy() end)
-            end
-        end
-        table.clear(PopupElements)
-    end
-
+    -- Interactive Dialog Delete Button
     Tab:AddButton({
         Title = "Delete Selected Script",
         Icon = "trash-2",
@@ -172,36 +161,31 @@ function ScriptManager.BuildUI(Tab, Fluent)
                 return
             end
 
-            -- Clear any pre-existing popups first
-            ClearPopup()
+            -- Opens Interactive Dialog Window with YES and NO Buttons
+            Window:Dialog({
+                Title = "Confirm Deletion",
+                Content = "Are you sure you want to delete '" .. SelectedScript .. "'?",
+                Buttons = {
+                    {
+                        Title = "Yes, Delete",
+                        Callback = function()
+                            SavedScripts[SelectedScript] = nil
+                            ScriptManager.Save(SavedScripts)
 
-            Fluent:Notify({ Title = "Confirm", Content = "Are you sure you want to delete '" .. SelectedScript .. "'?", Duration = 4 })
+                            SelectedScript = ""
+                            ScriptDropdown:SetValues(GetScriptNames())
 
-            -- Temporary "YES" Button
-            local yesBtn = Tab:AddButton({
-                Title = "✅ YES, Delete: " .. SelectedScript,
-                Callback = function()
-                    SavedScripts[SelectedScript] = nil
-                    ScriptManager.Save(SavedScripts)
-                    
-                    Fluent:Notify({ Title = "Deleted", Content = "'" .. SelectedScript .. "' was removed.", Duration = 3 })
-
-                    SelectedScript = ""
-                    ScriptDropdown:SetValues(GetScriptNames())
-                    ClearPopup() -- Self Destructs
-                end
+                            Fluent:Notify({ Title = "Deleted", Content = "Script successfully removed.", Duration = 3 })
+                        end
+                    },
+                    {
+                        Title = "No, Discard",
+                        Callback = function()
+                            Fluent:Notify({ Title = "Cancelled", Content = "Deletion cancelled.", Duration = 2 })
+                        end
+                    }
+                }
             })
-            table.insert(PopupElements, yesBtn)
-
-            -- Temporary "NO" Button
-            local noBtn = Tab:AddButton({
-                Title = "❌ NO, Discard Action",
-                Callback = function()
-                    Fluent:Notify({ Title = "Cancelled", Content = "Deletion discarded.", Duration = 2 })
-                    ClearPopup() -- Self Destructs
-                end
-            })
-            table.insert(PopupElements, noBtn)
         end
     })
 end
