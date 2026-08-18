@@ -1490,6 +1490,67 @@ InvisToggle:OnChanged(function(state)
     toggleSeatInvisibility(state)
     saveConfig()
 end)
+----------------------------------------------------
+-- Fling
+----------------------------------------------------
+task.spawn(function()
+    local hrp, character, currentVelocity
+    local microMove = 0.1
+    
+    while true do
+        if flingActive then
+            game:GetService("RunService").Heartbeat:Wait()
+            
+            character = LocalPlayer.Character
+            hrp = character and character:FindFirstChild("HumanoidRootPart")
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+            
+            if hrp and humanoid and humanoid.Health > 0 then
+                currentVelocity = hrp.AssemblyLinearVelocity
+                
+                -- Dynamic movement injection
+                local moveDirection = humanoid.MoveDirection
+                local flingVelocity = Vector3.new(moveDirection.X * 5000, 25000, moveDirection.Z * 5000)
+                
+                if moveDirection.Magnitude == 0 then
+                    flingVelocity = Vector3.new(25000, 25000, 25000)
+                end
+                
+                -- Physics spike
+                hrp.AssemblyLinearVelocity = flingVelocity
+                game:GetService("RunService").RenderStepped:Wait()
+                
+                -- Snap back
+                if hrp and hrp.Parent then
+                    hrp.AssemblyLinearVelocity = currentVelocity
+                end
+                
+                -- Vibrate frame
+                game:GetService("RunService").Stepped:Wait()
+                if hrp and hrp.Parent then
+                    hrp.AssemblyLinearVelocity = currentVelocity + Vector3.new(0, microMove, 0)
+                    microMove = microMove * -1
+                end
+            end
+        else
+            -- Cleanup frame state
+            character = LocalPlayer.Character
+            hrp = character and character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+            end
+            task.wait(0.9) -- Anti-lag rest step
+        end
+    end
+end)
+
+local TouchFlingToggle = Tabs.Special:AddToggle("TouchFlingToggle", {
+    Title = "Touch Fling",
+    Default = false,
+    Callback = function(Value)
+        flingActive = Value
+    end
+})
 
 ----------------------------------------------------
 -- USER PROFILE CARD
