@@ -292,7 +292,7 @@ local Window = Fluent:CreateWindow({
 })
 
 task.spawn(function()
-    task.wait(0.5)
+    task.wait(3)
     local ScreenGui = SafeParent:FindFirstChild("Fluent") or CoreGui:FindFirstChild("Fluent") or CoreGui:FindFirstChild("ScreenGui")
     if ScreenGui then
         ScreenGui.Name = "FluentUI_CustomMenu"
@@ -1553,80 +1553,54 @@ local TouchFlingToggle = Tabs.Special:AddToggle("TouchFlingToggle", {
         flingActive = Value
     end
 })
-
 ----------------------------------------------------
 -- Anti-Fling
 ----------------------------------------------------
 local function setAntiFlingState(state)
-    -- Your standard global connection check and disconnect
-    if getgenv().WolfAntiFlingConn then 
-        getgenv().WolfAntiFlingConn:Disconnect() 
-        getgenv().WolfAntiFlingConn = nil 
+    if getgenv().WolfAntiFlingConn then
+        getgenv().WolfAntiFlingConn:Disconnect()
+        getgenv().WolfAntiFlingConn = nil
     end
 
     if state then
         getgenv().WolfAntiFlingConn = RunService.Stepped:Connect(function()
-            local char = LocalPlayer.Character
-            if not char then return end
-            
-            -- Look for players to apply the ghost-hitbox effect
+            local myChar = LocalPlayer.Character
+            if not myChar then return end
+
+            -- Disable collision between your character parts and other player parts
             for _, player in ipairs(Players:GetPlayers()) do
                 if player ~= LocalPlayer and player.Character then
-                    for _, enemyPart in ipairs(player.Character:GetDescendants()) do
-                        if enemyPart:IsA("BasePart") then
-                            for _, myPart in ipairs(char:GetDescendants()) do
-                                if myPart:IsA("BasePart") then
-                                    local constraintName = "AntiFling_" .. player.Name
-                                    
-                                    if not myPart:FindFirstChild(constraintName) then
-                                        local nocollide = Instance.new("NoCollisionConstraint")
-                                        nocollide.Name = constraintName
-                                        nocollide.Part0 = myPart
-                                        nocollide.Part1 = enemyPart
-                                        nocollide.Parent = myPart
-                                    end
-                                end
+                    for _, otherPart in ipairs(player.Character:GetDescendants()) do
+                        if otherPart:IsA("BasePart") then
+                            otherPart.CanCollide = false
+                            
+                            -- Clamp extreme linear & angular velocities used by flings
+                            if otherPart.AssemblyLinearVelocity.Magnitude > 50 or otherPart.AssemblyAngularVelocity.Magnitude > 50 then
+                                otherPart.AssemblyLinearVelocity = Vector3.zero
+                                otherPart.AssemblyAngularVelocity = Vector3.zero
                             end
                         end
                     end
                 end
             end
-        end)
-    else
-        -- NO-LAG CLEANUP ENGINE
-        local char = LocalPlayer.Character
-        if char then
-            for _, myPart in ipairs(char:GetDescendants()) do
+            
+            -- Prevent your character from gaining unintended fling momentum
+            for _, myPart in ipairs(myChar:GetDescendants()) do
                 if myPart:IsA("BasePart") then
-                    -- Completely strip the player-targeted constraints away
-                    for _, child in ipairs(myPart:GetChildren()) do
-                        if child:IsA("NoCollisionConstraint") and string.match(child.Name, "^AntiFling_") then
-                            child:Destroy()
-                        end
+                    if myPart.AssemblyLinearVelocity.Magnitude > 100 then
+                        myPart.AssemblyLinearVelocity = Vector3.zero
                     end
-                    
-                    -- Instant safety wipe of any residual rotational spin
-                    myPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-                    
-                    -- Return collisions back to normal settings
-                    if myPart.Name == "HumanoidRootPart" then
-                        myPart.CanCollide = false
-                    else
-                        myPart.CanCollide = true
+                    if myPart.AssemblyAngularVelocity.Magnitude > 100 then
+                        myPart.AssemblyAngularVelocity = Vector3.zero
                     end
                 end
             end
-            
-            local hum = char:FindFirstChildWhichIsA("Humanoid")
-            if hum then
-                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-            end
-        end
+        end)
     end
 end
 
--- Fluent Toggle Layout Setup
-local AntiFlingToggle = Tabs.Special:AddToggle("AntiFlingToggle", {
+-- UI Toggle Setup
+local AntiFlingToggle = Tabs.Player:AddToggle("AntiFlingToggle", {
     Title = "Anti-Fling",
     Default = Settings.AntiFling or false
 })
@@ -1634,12 +1608,10 @@ local AntiFlingToggle = Tabs.Special:AddToggle("AntiFlingToggle", {
 AntiFlingToggle:OnChanged(function(state)
     Settings.AntiFling = state
     setAntiFlingState(state)
-    if saveConfig then saveConfig() end
+    saveConfig()
 end)
 
--- Run right away if the user saved it as 'true'
 if Settings.AntiFling then setAntiFlingState(true) end
-
 ----------------------------------------------------
 -- USER PROFILE CARD
 ----------------------------------------------------
