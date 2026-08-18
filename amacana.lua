@@ -16,14 +16,6 @@ local playerGui = localPlayer:WaitForChild("PlayerGui")
 local camera = Workspace.CurrentCamera
 
 ----------------------------------------------------
--- ANTI-DUPLICATION CHECK
-----------------------------------------------------
-if getgenv().AutoLoadInitialized then
-    return
-end
-getgenv().AutoLoadInitialized = true
-
-----------------------------------------------------
 -- HIDDEN / PROTECTED GUI CONTAINER (ANTI-DETECTION)
 ----------------------------------------------------
 local function GetSafeGuiParent()
@@ -75,23 +67,6 @@ if typeof(hookmetamethod) == "function" then
         end))
     end)
 end
-
-----------------------------------------------------
--- AUTO-EXECUTE TELEPORT QUEUE
-----------------------------------------------------
-local function SetupAutoExecuteOnTeleport()
-    local queueFunction = queue_on_teleport or (syn and syn.queue_on_teleport) or queueonteleport
-    if queueFunction then
-        pcall(queueFunction, [[
-            repeat task.wait() until game:IsLoaded()
-            task.wait(3)
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/Badboy45099/Tite/refs/heads/main/amacana.lua"))()
-        ]])
-    end
-end
-
-SetupAutoExecuteOnTeleport()
-TeleportService.TeleportInitFailed:Connect(SetupAutoExecuteOnTeleport)
 
 --// ============================================
 --// DEEP CLEANUP SYSTEM
