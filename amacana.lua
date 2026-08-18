@@ -14,6 +14,84 @@ local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 local camera = Workspace.CurrentCamera
 
+----------------------------------------------------
+-- ANTI-DUPLICATION CHECK
+----------------------------------------------------
+if getgenv().AutoLoadInitialized then
+    return
+end
+getgenv().AutoLoadInitialized = true
+
+----------------------------------------------------
+-- HIDDEN / PROTECTED GUI CONTAINER (ANTI-DETECTION)
+----------------------------------------------------
+local function GetSafeGuiParent()
+    if gethui then
+        return gethui()
+    elseif syn and syn.protect_gui then
+        local folder = Instance.new("Folder")
+        syn.protect_gui(folder)
+        folder.Parent = CoreGui
+        return folder
+    else
+        return CoreGui
+    end
+end
+
+local SafeParent = GetSafeGuiParent()
+
+----------------------------------------------------
+-- SAFE HOOKS & METATABLE PROTECTION
+----------------------------------------------------
+-- Anti-Kick Hooking
+if LocalPlayer and typeof(hookfunction) == "function" then
+    pcall(function()
+        local oldKick
+        oldKick = hookfunction(LocalPlayer.Kick, function(self, reason)
+            if self == LocalPlayer then
+                return nil
+            end
+            return oldKick(self, reason)
+        end)
+    end)
+end
+
+-- Telemetry & Report Filtering via hookmetamethod (Prevents Crashes)
+if typeof(hookmetamethod) == "function" then
+    pcall(function()
+        local oldNamecall
+        oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+            local method = getnamecallmethod()
+            
+            if method == "FireServer" or method == "InvokeServer" then
+                local name = tostring(self.Name):lower()
+                if name:find("cheat") or name:find("detection") or name:find("report") or name:find("kick") or name:find("telemetry") or name:find("check") then
+                    return nil
+                end
+            end
+            
+            return oldNamecall(self, ...)
+        end))
+    end)
+end
+
+----------------------------------------------------
+-- AUTO-EXECUTE TELEPORT QUEUE
+----------------------------------------------------
+local function SetupAutoExecuteOnTeleport()
+    local queueFunction = queue_on_teleport or (syn and syn.queue_on_teleport) or queueonteleport
+    if queueFunction then
+        pcall(queueFunction, [[
+            repeat task.wait() until game:IsLoaded()
+            task.wait(3)
+            loadstring(game:HttpGet("--"))()
+        ]])
+    end
+end
+
+SetupAutoExecuteOnTeleport()
+TeleportService.TeleportInitFailed:Connect(SetupAutoExecuteOnTeleport)
+
 --// ============================================
 --// DEEP CLEANUP SYSTEM
 --// ============================================
@@ -155,8 +233,12 @@ local function updateFOVCircle()
 end
 
 --// ============================================
---// TARGETING LOGIC
+--// TARGETING LOGIC & SWIPE SYSTEM
 --// ============================================
+
+local lockedTarget = nil
+local swipeStartPos = nil
+local SWIPE_THRESHOLD = 30 -- Pixels needed to register a swipe
 
 local function getTargetPart(character)
     if not character then return nil end
@@ -232,11 +314,10 @@ local function isValidTarget(target)
     return humanoid and humanoid.Health > 0 and getTargetPart(target) ~= nil
 end
 
-local function getBestTarget()
-    local bestTarget = nil
-    local bestDistance = math.huge
+local function getAllTargetsInFOV()
+    local targets = {}
     local center = getScreenCenter()
-    
+
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= localPlayer and player.Character then
             local character = player.Character
@@ -244,16 +325,68 @@ local function getBestTarget()
                 local part = getTargetPart(character)
                 if part and isTargetInFOV(part) and canSeeTarget(character) then
                     local screenPos = camera:WorldToViewportPoint(part.Position)
-                    local distance = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
-                    if distance < bestDistance then
-                        bestDistance = distance
-                        bestTarget = character
-                    end
+                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+                    table.insert(targets, {
+                        character = character,
+                        screenX = screenPos.X,
+                        distanceToCenter = dist
+                    })
                 end
             end
         end
     end
-    return bestTarget
+    return targets
+end
+
+local function getBestTarget()
+    local targets = getAllTargetsInFOV()
+    if #targets == 0 then
+        lockedTarget = nil
+        return nil
+    end
+
+    -- Keep current target if still valid in FOV
+    if lockedTarget and isValidTarget(lockedTarget) then
+        local part = getTargetPart(lockedTarget)
+        if part and isTargetInFOV(part) and canSeeTarget(lockedTarget) then
+            return lockedTarget
+        end
+    end
+
+    -- Fallback to nearest player to screen center
+    table.sort(targets, function(a, b)
+        return a.distanceToCenter < b.distanceToCenter
+    end)
+
+    lockedTarget = targets[1].character
+    return lockedTarget
+end
+
+local function cycleTarget(direction)
+    local targets = getAllTargetsInFOV()
+    if #targets < 2 then return end
+
+    -- Sort targets from left to right on screen
+    table.sort(targets, function(a, b)
+        return a.screenX < b.screenX
+    end)
+
+    local currentIndex = 1
+    for i, t in ipairs(targets) do
+        if t.character == lockedTarget then
+            currentIndex = i
+            break
+        end
+    end
+
+    local newIndex = currentIndex + direction
+    if newIndex > #targets then
+        newIndex = 1
+    elseif newIndex < 1 then
+        newIndex = #targets
+    end
+
+    lockedTarget = targets[newIndex].character
 end
 
 --// ============================================
@@ -279,8 +412,6 @@ local function hardLockToTarget(target)
         if rootPart then
             local lookAtPos = Vector3.new(targetPos.X, rootPart.Position.Y, targetPos.Z)
             rootPart.CFrame = CFrame.lookAt(rootPart.Position, lookAtPos)
-            
-            -- Stop slide spinning physics forces
             rootPart.AssemblyAngularVelocity = Vector3.zero
         end
     end
@@ -659,10 +790,9 @@ end
 updateFOVCircle()
 
 --// ============================================
---// DUAL STAGE LOCKING (OVERLOAD RECOIL & SLIDES)
+--// DUAL STAGE LOCKING & INPUT LISTENERS
 --// ============================================
 
--- Stage 1: Right before Camera renders (pre-frame)
 RunService:BindToRenderStep("HardLockAimbotStep_Pre", Enum.RenderPriority.Camera.Value - 1, function()
     if CONFIG.enabled then
         currentTarget = getBestTarget()
@@ -672,7 +802,6 @@ RunService:BindToRenderStep("HardLockAimbotStep_Pre", Enum.RenderPriority.Camera
     end
 end)
 
--- Stage 2: Right AFTER game weapon/recoil scripts apply (post-frame override)
 RunService:BindToRenderStep("HardLockAimbotStep_Post", Enum.RenderPriority.Last.Value, function()
     if CONFIG.enabled and currentTarget and isValidTarget(currentTarget) then
         hardLockToTarget(currentTarget)
@@ -681,9 +810,37 @@ end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
+    
     if input.KeyCode == Enum.KeyCode.L then
         Frame.Visible = not Frame.Visible
     end
+
+    -- Capture touch or mouse drag start inside FOV
+    if CONFIG.enabled and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+        local startPos = Vector2.new(input.Position.X, input.Position.Y)
+        local center = getScreenCenter()
+
+        if (startPos - center).Magnitude <= CONFIG.fov then
+            swipeStartPos = startPos
+        end
+    end
 end)
 
-print("✅ Extreme Force Lock Active (Double-Stage Binding Overrides Weapon Recoil & Slides)!")
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    if not CONFIG.enabled or not swipeStartPos then return end
+
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        local endPos = Vector2.new(input.Position.X, input.Position.Y)
+        local delta = endPos - swipeStartPos
+        swipeStartPos = nil
+
+        -- Trigger target swap if horizontal swipe distance is met
+        if math.abs(delta.X) >= SWIPE_THRESHOLD and math.abs(delta.X) > math.abs(delta.Y) then
+            if delta.X > 0 then
+                cycleTarget(1)  -- Swipe Right -> Next player on right
+            else
+                cycleTarget(-1) -- Swipe Left -> Next player on left
+            end
+        end
+    end
+end)
