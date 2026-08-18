@@ -131,6 +131,7 @@ end
 if getgenv().WolfInfJumpConn then getgenv().WolfInfJumpConn:Disconnect() getgenv().WolfInfJumpConn = nil end
 if getgenv().WolfNoclipConn then getgenv().WolfNoclipConn:Disconnect() getgenv().WolfNoclipConn = nil end
 if getgenv().WolfNoclipDescendantConn then getgenv().WolfNoclipDescendantConn:Disconnect() getgenv().WolfNoclipDescendantConn = nil end
+if getgenv().WolfAntiFlingConn then getgenv().WolfAntiFlingConn:Disconnect() getgenv().WolfAntiFlingConn = nil end
 
 if getgenv().WolfFlyActive then getgenv().WolfFlyActive = false end
 if getgenv().WolfFlyKeyDownConn then getgenv().WolfFlyKeyDownConn:Disconnect() getgenv().WolfFlyKeyDownConn = nil end
