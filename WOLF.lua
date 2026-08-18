@@ -280,7 +280,7 @@ StartupSound.PlayOnRemove = false
 StartupSound.Parent = game:GetService("SoundService")
 
 StartupSound:Play()
-Debris:AddItem(StartupSound, 3)
+Debris:AddItem(StartupSound, 6)
 
 local FluentSuccess, Fluent = pcall(function()
     return loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -1610,7 +1610,7 @@ local function setAntiFlingState(state)
 end
 
 -- UI Toggle Setup
-local AntiFlingToggle = Tabs.Player:AddToggle("AntiFlingToggle", {
+local AntiFlingToggle = Tabs.Special:AddToggle("AntiFlingToggle", {
     Title = "Anti-Fling",
     Default = Settings.AntiFling or false
 })
