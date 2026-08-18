@@ -14,6 +14,15 @@ local isEditModeActive = false
 local selectedObject = nil
 local activeHighlight = nil
 
+_G.CloseLoadedUI = function()
+    if screenGui then
+        pcall(function()
+            screenGui:Destroy()
+        end)
+    end
+    _G.CloseLoadedUI = nil
+end
+
 -- MONOCHROME STYLING CONFIG
 local STYLE = {
 	MainBg = Color3.fromRGB(15, 15, 15),
