@@ -2,8 +2,9 @@ local HttpService = game:GetService("HttpService")
 local ScriptManager = {}
 
 ScriptManager.FileName = "saved_scripts.json"
+ScriptManager.RunningScripts = {}
 
--- Load scripts safely from JSON
+-- Load saved scripts safely
 function ScriptManager.Load()
     if isfile and readfile and isfile(ScriptManager.FileName) then
         local success, result = pcall(function()
@@ -16,7 +17,7 @@ function ScriptManager.Load()
     return {}
 end
 
--- Save scripts safely to JSON
+-- Save scripts safely
 function ScriptManager.Save(data)
     if writefile then
         pcall(function()
@@ -25,8 +26,21 @@ function ScriptManager.Save(data)
     end
 end
 
--- Safe execution using task.spawn & pcall (Prevents game freezes/crashes)
+-- Safe execution with debounce protection (Prevents multi-execution crash)
 function ScriptManager.Execute(code, scriptName, Fluent)
+    if ScriptManager.RunningScripts[scriptName] then
+        if Fluent then
+            Fluent:Notify({
+                Title = "Already Running",
+                Content = scriptName .. " is already executing!",
+                Duration = 3
+            })
+        end
+        return
+    end
+
+    ScriptManager.RunningScripts[scriptName] = true
+
     if Fluent then
         Fluent:Notify({
             Title = "Executing",
@@ -38,7 +52,6 @@ function ScriptManager.Execute(code, scriptName, Fluent)
     task.spawn(function()
         local success, result = pcall(function()
             local targetCode = code
-            -- If user pasted an HTTP link, download raw text first
             if code:sub(1, 4) == "http" then
                 targetCode = game:HttpGet(code)
             end
@@ -46,6 +59,8 @@ function ScriptManager.Execute(code, scriptName, Fluent)
             if not loadedFunc then error(loadErr) end
             return loadedFunc()
         end)
+
+        ScriptManager.RunningScripts[scriptName] = nil
 
         if not success and Fluent then
             Fluent:Notify({
