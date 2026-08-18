@@ -1627,7 +1627,7 @@ if Settings.AntiFling then setAntiFlingState(true) end
 ----------------------------------------------------
 -- AimBot
 ----------------------------------------------------
-local AimbotToggle = Tabs.Player:AddToggle("AimbotToggle", { Title = "Aimbot", Default = Settings.Aimbot }) 
+local AimbotToggle = Tabs.Special:AddToggle("AimbotToggle", { Title = "Aimbot", Default = Settings.Aimbot }) 
 
 local LoadedMenuInstance = nil
 local ToggleButton = nil
