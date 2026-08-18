@@ -84,7 +84,7 @@ local function SetupAutoExecuteOnTeleport()
         pcall(queueFunction, [[
             repeat task.wait() until game:IsLoaded()
             task.wait(3)
-            loadstring(game:HttpGet("--"))()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Badboy45099/Tite/refs/heads/main/amacana.lua"))()
         ]])
     end
 end
