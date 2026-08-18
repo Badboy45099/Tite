@@ -1914,37 +1914,40 @@ end)
 ----------------------------------------------------
 local ActiveScriptThread = nil 
 
--- 1. Create the toggle UI element
 local EditGameUIToggle = Tabs.Player:AddToggle("EditGameUIToggle", { 
     Title = "Edit Game UI", 
     Default = Settings.EditGameUI 
 })
 
--- 2. Handle state changes safely
 EditGameUIToggle:OnChanged(function(state)
     Settings.EditGameUI = state
     saveConfig()
     
     if state then
-        if ActiveScriptThread then 
-            task.cancel(ActiveScriptThread) 
-            ActiveScriptThread = nil
-        end
+        -- Clean up any lingering scripts or UI before opening a new one
+        if _G.CloseLoadedUI then pcall(_G.CloseLoadedUI) end
+        if ActiveScriptThread then task.cancel(ActiveScriptThread) end
         
         ActiveScriptThread = task.spawn(function()
             pcall(function()
+                -- Replace URL with your actual raw script link
                 local sourceCode = game:HttpGet("https://raw.githubusercontent.com/Badboy45099/Tite/refs/heads/main/Settings/edit.lua")
                 local compiledScript = loadstring(sourceCode)
-                
                 if compiledScript then
                     compiledScript()
                 end
             end)
         end)
     else
+        -- Stop the execution thread immediately
         if ActiveScriptThread then
             task.cancel(ActiveScriptThread)
             ActiveScriptThread = nil
+        end
+        
+        -- Safely tell the external UI to delete itself
+        if _G.CloseLoadedUI then
+            pcall(_G.CloseLoadedUI)
         end
     end
 end)
@@ -1954,6 +1957,14 @@ if Settings.EditGameUI then
         EditGameUIToggle:SetValue(true)
     end)
 end
+
+----------------------------------------------
+-- CUSTOM LOADSTRING MANAGER INSIDE TABS.GAMES
+----------------------------------------------
+local ScriptManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Badboy45099/Tite/refs/heads/main/Settings/scriptmanager.lua"))()
+
+-- Builds UI directly inside Tabs.Games without crash risks
+ScriptManager.BuildUI(Tabs.Games, Fluent)
 ------------------------------------------------------
 
 local WolfBgToggle = Tabs.Settings:AddToggle("WolfBgToggle", {
