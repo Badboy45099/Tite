@@ -197,6 +197,7 @@ end
 local ConfigFileName = "FluentUI_Settings.json"
 
 local Settings = {
+	EditGameUI = false,
 	Aimbot = false,
 	Antifling = false,
     XRay = false,
@@ -1911,7 +1912,49 @@ end)
 ----------------------------------------------------
 -- OTHER TABS & SETTINGS
 ----------------------------------------------------
-Tabs.Games:AddParagraph({ Title = "Games", Content = "Game features go here." })
+local ActiveScriptThread = nil 
+
+-- 1. Create the toggle UI element
+local EditGameUIToggle = Tabs.Player:AddToggle("EditGameUIToggle", { 
+    Title = "Edit Game UI", 
+    Default = Settings.EditGameUI 
+})
+
+-- 2. Handle state changes safely
+EditGameUIToggle:OnChanged(function(state)
+    Settings.EditGameUI = state
+    saveConfig()
+    
+    if state then
+        if ActiveScriptThread then 
+            task.cancel(ActiveScriptThread) 
+            ActiveScriptThread = nil
+        end
+        
+        ActiveScriptThread = task.spawn(function()
+            pcall(function()
+                local sourceCode = game:HttpGet("https://raw.githubusercontent.com/Badboy45099/Tite/refs/heads/main/Settings/edit.lua")
+                local compiledScript = loadstring(sourceCode)
+                
+                if compiledScript then
+                    compiledScript()
+                end
+            end)
+        end)
+    else
+        if ActiveScriptThread then
+            task.cancel(ActiveScriptThread)
+            ActiveScriptThread = nil
+        end
+    end
+end)
+
+if Settings.EditGameUI then
+    task.defer(function()
+        EditGameUIToggle:SetValue(true)
+    end)
+end
+------------------------------------------------------
 
 local WolfBgToggle = Tabs.Settings:AddToggle("WolfBgToggle", {
     Title = "Wolf Icon Background (White)",
