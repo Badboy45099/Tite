@@ -16,7 +16,7 @@ local playerGui = localPlayer:WaitForChild("PlayerGui")
 local camera = Workspace.CurrentCamera
 
 -- ============================================================================
--- AIMBOT.LUA (Hosted Script - Cleans up everything automatically)
+-- AIMBOT.LUA (Fixed Core Tracking UI Isolation)
 -- ============================================================================
 
 local LoadedMenuInstance = nil
@@ -37,7 +37,7 @@ local function CleanOldElements()
     if oldCore then pcall(function() oldCore:Destroy() end) end
     
     if PlayerGui then
-        local oldPlayer = PlayerGui:FindFirstChild("AimbotMenuToggleGui")
+        local oldPlayer = PlayerGui:FindFirstChild("PlayerGui") and PlayerGui:FindFirstChild("AimbotMenuToggleGui")
         if oldPlayer then pcall(function() oldPlayer:Destroy() end) end
     end
 end
@@ -152,7 +152,7 @@ local function UnloadAimbotScript()
     end
     
     pcall(function() if gcinfo then gcinfo() end end)
-    print("Aimbot thread cleared successfully!")
+    print("Aimbot thread completely cleaned from memory.")
 end
 
 local function LoadAimbotScript()
@@ -165,8 +165,11 @@ local function LoadAimbotScript()
     local CoreGui = game:GetService("CoreGui")
     local PlayerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
     
+    -- FIXED: Explicitly filter out the button GUI from being captured or destroyed
     local function TrackGuiTree(child)
-        if child.Name == "AimbotMenuToggleGui" or child.Name == "RobloxGui" then return end
+        if child.Name == "AimbotMenuToggleGui" or child.Name == "RobloxGui" or child.Name:find("AimbotMenu") then 
+            return 
+        end
         if child:IsA("ScreenGui") or child:IsA("GuiMain") then
             LoadedMenuInstance = child
         end
@@ -177,7 +180,7 @@ local function LoadAimbotScript()
     
     task.spawn(function()
         local success, result = pcall(function()
-            -- REPLACE THIS LINK WITH YOUR ACTUAL THIRD PARTY SCRIPT LINK
+            -- Third party script loadstring delivery hook
             return loadstring(game:HttpGet("https://raw.githubusercontent.com/Badboy45099/Tite/refs/heads/main/amacana.lua"))()
         end)
         
@@ -196,18 +199,12 @@ local function LoadAimbotScript()
     end)
 end
 
--- ============================================================================
--- THE WATCHDOG (Prevents loop spamming and freezing)
--- ============================================================================
+-- Watchdog implementation loop
 task.spawn(function()
     LoadAimbotScript()
-    
-    -- This checks if the user turned the toggle off in main.lua
     while _G.AimbotActive do
-        task.wait(0.5) -- High delay ensures it never causes lag
+        task.wait(0.5)
     end
-    
-    -- Loop broke! Run the cleanup sequence immediately
     UnloadAimbotScript()
 end)
 
