@@ -1530,9 +1530,18 @@ local TouchFlingToggle = Tabs.Special:AddToggle("TouchFlingToggle", {
         flingActive = Value
     end
 })
+
 ----------------------------------------------------
 -- Anti-Fling
 ----------------------------------------------------
+local defaultCollidingParts = {
+    ["HumanoidRootPart"] = false,
+    ["Torso"] = true,          -- R6
+    ["Head"] = true,           -- R6 / R15
+    ["UpperTorso"] = true,     -- R15
+    ["LowerTorso"] = true      -- R15
+}
+
 local function setAntiFlingState(state)
     if getgenv().WolfAntiFlingConn then
         getgenv().WolfAntiFlingConn:Disconnect()
@@ -1573,6 +1582,26 @@ local function setAntiFlingState(state)
                 end
             end
         end)
+    else
+        -- HARD RESET COLLISION ON OTHER PLAYERS WHEN TURNED OFF
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+                for _, part in ipairs(player.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        if defaultCollidingParts[part.Name] ~= nil then
+                            part.CanCollide = defaultCollidingParts[part.Name]
+                        else
+                            part.CanCollide = false -- Arms and legs are false by default in Roblox
+                        end
+                    end
+                end
+                
+                local hum = player.Character:FindFirstChildWhichIsA("Humanoid")
+                if hum then
+                    hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                end
+            end
+        end
     end
 end
 
@@ -1589,7 +1618,9 @@ AntiFlingToggle:OnChanged(function(state)
 end)
 
 if Settings.AntiFling then setAntiFlingState(true) end
-
+----------------------------------------------------
+-- AimBot
+----------------------------------------------------
 _G.AimbotActive = false 
 
 local AimbotToggle = Tabs.Special:AddToggle("AimbotToggle", { 
