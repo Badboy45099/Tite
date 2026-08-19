@@ -14,109 +14,35 @@ local NetworkClient = game:GetService("NetworkClient")
 local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 
 ----------------------------------------------------
--- ANTI-DUPLICATION CHECK
+-- 🛡️ GLOBAL CONFIGURATION
 ----------------------------------------------------
-if getgenv().AutoLoadInitialized then
-    return
-end
-getgenv().AutoLoadInitialized = true
+local immunePlayers = {} 
 
--- CONFIGURATION
-local FILE_NAME = "immune_players.json"
-local immunePlayers = {}
+----------------------------------------------------
+-- 🛡️ CLIENT PROTECTION & AUTO-IMMUNITY
+----------------------------------------------------
 local LocalPlayer = Players.LocalPlayer
 
--- 📂 JSON FILE FUNCTIONS
-local function saveImmuneList()
-    local success, jsonStr = pcall(function()
-        return HttpService:JSONEncode(immunePlayers)
-    end)
-    if success and writefile then
-        writefile(FILE_NAME, jsonStr)
-        print("[Immunity] Saved list to " .. FILE_NAME)
-    else
-        warn("[Immunity] Failed to save list.")
-    end
-end
-
-local function loadImmuneList()
-    if isfile and isfile(FILE_NAME) then
-        local success, content = pcall(function()
-            return readfile(FILE_NAME)
-        end)
-        if success and content ~= "" then
-            local decodeSuccess, decodedTable = pcall(function()
-                return HttpService:JSONDecode(content)
-            end)
-            if decodeSuccess and type(decodedTable) == "table" then
-                immunePlayers = decodedTable
-                print("[Immunity] Loaded existing immune list.")
-                return
-            end
-        end
-    end
-    print("[Immunity] No valid save file found. Initializing empty list.")
-    immunePlayers = {}
-end
-
--- Automatically load saved IDs when the script runs
-loadImmuneList()
-
-----------------------------------------------------
--- ⚙️ UI INTEGRATION (Place inside tabs.settings)
-----------------------------------------------------
--- Insert this block wherever your script builds the 'tabs.settings' page
-tabs.settings:CreateButton({
-    Title = "🛡️ Toggle My Immunity",
-    Description = "Click to instantly make your current account immune",
-    Callback = function()
-        if not LocalPlayer then return end
-        
-        local myId = LocalPlayer.UserId
-        local index = table.find(immunePlayers, myId)
-
-        if not index then
-            -- Adds your current account to the immune list
-            table.insert(immunePlayers, myId)
-            saveImmuneList()
-            print("🎉 Success! Your account (" .. LocalPlayer.Name .. ") is now immune.")
-        else
-            -- Removes your account if clicked again (Toggles it off)
-            table.remove(immunePlayers, index)
-            saveImmuneList()
-            print("❌ Removed immunity for " .. LocalPlayer.Name .. ".")
-        end
-    end
-})
-
-tabs.settings:CreateButton({
-    Title = "Wipe Immune Data",
-    Description = "Removes immunity from all accounts in the JSON file",
-    Callback = function()
-        table.clear(immunePlayers)
-        saveImmuneList()
-        print("Immune player list wiped completely.")
-    end
-})
-
-----------------------------------------------------
--- 🛡️ PROTECTION FUNCTIONS & HOOKS
-----------------------------------------------------
-local function kickPlayerSafely(player, reason)
-    if table.find(immunePlayers, player.UserId) then
-        print(player.Name .. " is immune to automated kicks.")
-        return 
-    end
-    player:Kick(reason)
-end
-
 if LocalPlayer then
+    -- AUTO-IMMUNITY: Automatically add the executing player's ID
+    table.insert(immunePlayers, LocalPlayer.UserId)
+    print("Successfully granted automatic immunity to: " .. LocalPlayer.Name .. " (" .. LocalPlayer.UserId .. ")")
+
+    local function kickPlayerSafely(player, reason)
+        if table.find(immunePlayers, player.UserId) then
+            print(player.Name .. " is immune to automated kicks.")
+            return 
+        end
+        player:Kick(reason)
+    end
+
     -- Anti-Kick Hook
     pcall(function()
         if LocalPlayer.Kick then
             local oldKick
             oldKick = hookfunction(LocalPlayer.Kick, function(self, reason)
                 if self == LocalPlayer then
+                    print("Blocked a local Kick attempt.")
                     return nil 
                 end
                 return oldKick(self, reason)
@@ -132,22 +58,26 @@ if LocalPlayer then
 
         mt.__namecall = newcclosure(function(self, ...)
             local method = getnamecallmethod()
+            
             if tostring(method) == "FireServer" or tostring(method) == "InvokeServer" then
                 local name = tostring(self.Name):lower()
                 if name:find("cheat") or name:find("detection") or name:find("report") or name:find("kick") or name:find("telemetry") or name:find("check") then
+                    print("Blocked telemetry/detection traffic: " .. tostring(self.Name))
                     return nil 
                 end
             end
+            
             return oldNamecall(self, ...)
         end)
         setreadonly(mt, true)
     end)
 
-    -- Anti-Ban Hook (StepBroFurious)
+    -- Anti-Ban Hook (Credit: StepBroFurious)
     pcall(function()
         local X
         X = hookmetamethod(game, "__namecall", function(self, ...)
             local method = getnamecallmethod()
+            
             if method == "Ban" then
                 local eval1 = {false}
                 local eval2 = {false}
@@ -157,6 +87,7 @@ if LocalPlayer then
                     local stack = debug.getstack(3)
                     local counter = 0
                     local expected
+                    
                     for i, v in pairs(stack) do
                         if v == LocalPlayer.Name or v == "Ban" or v == "Packet" or v == "Network" then
                             counter = counter + 1
@@ -168,13 +99,14 @@ if LocalPlayer then
                             end
                         end
                     end
+
                     if counter == expected then
                         eval1 = {true, counter + 5}
                     end
                 end
 
-                if eval1 then
-                    if #args == eval1 then
+                if eval1[1] then
+                    if #args == eval1[2] then
                         local counter = 0
                         local outgoingkey
                         for i, v in pairs(args) do
@@ -184,24 +116,33 @@ if LocalPlayer then
                                 outgoingkey = v
                             end
                         end
-                        if counter >= eval1 then
+                        if counter >= eval1[2] then
                             eval2 = {true, outgoingkey}
                         end
                     end
                 end
 
-                if eval2 then
+                if eval2[1] then
                     pcall(function()
                         NetworkClient:SetOutgoingKBPSLimit(0)
                     end)
                     LocalPlayer:Kick("Game attempted to ban you but was blocked")
-                    return wait(9e9)
+                    return task.wait(9e9) -- Updated wait() to task.wait() for modern Luau
                 end
             end
+
             return X(self, ...)
         end)
     end)
 end
+
+----------------------------------------------------
+-- ANTI-DUPLICATION CHECK
+----------------------------------------------------
+if getgenv().AutoLoadInitialized then
+    return
+end
+getgenv().AutoLoadInitialized = true
 
 ----------------------------------------------------
 -- AUTO-EXECUTE TELEPORT QUEUE
