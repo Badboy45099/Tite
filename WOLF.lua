@@ -24,6 +24,7 @@ getgenv().AutoLoadInitialized = true
 -- CONFIGURATION
 local FILE_NAME = "immune_players.json"
 local immunePlayers = {}
+local LocalPlayer = Players.LocalPlayer
 
 -- 📂 JSON FILE FUNCTIONS
 local function saveImmuneList()
@@ -64,35 +65,37 @@ loadImmuneList()
 ----------------------------------------------------
 -- ⚙️ UI INTEGRATION (Place inside tabs.settings)
 ----------------------------------------------------
-tabs.settings:CreateInput({
-    Title = "Add Immune Player ID",
-    Description = "Type a UserID to make them immune",
-    Default = "",
-    Placeholder = "Enter Roblox UserID...",
-    NumericOnly = true,
-    Callback = function(value)
-        local targetId = tonumber(value)
-        if targetId then
-            if not table.find(immunePlayers, targetId) then
-                table.insert(immunePlayers, targetId)
-                saveImmuneList() -- Saves automatically on add
-                print("Added " .. targetId .. " to immune list.")
-            else
-                print("ID " .. targetId .. " is already immune.")
-            end
+-- Insert this block wherever your script builds the 'tabs.settings' page
+tabs.settings:CreateButton({
+    Title = "🛡️ Toggle My Immunity",
+    Description = "Click to instantly make your current account immune",
+    Callback = function()
+        if not LocalPlayer then return end
+        
+        local myId = LocalPlayer.UserId
+        local index = table.find(immunePlayers, myId)
+
+        if not index then
+            -- Adds your current account to the immune list
+            table.insert(immunePlayers, myId)
+            saveImmuneList()
+            print("🎉 Success! Your account (" .. LocalPlayer.Name .. ") is now immune.")
         else
-            print("Invalid UserID entered.")
+            -- Removes your account if clicked again (Toggles it off)
+            table.remove(immunePlayers, index)
+            saveImmuneList()
+            print("❌ Removed immunity for " .. LocalPlayer.Name .. ".")
         end
     end
 })
 
 tabs.settings:CreateButton({
-    Title = "Clear All Immune IDs",
-    Description = "Removes immunity from all added players",
+    Title = "Wipe Immune Data",
+    Description = "Removes immunity from all accounts in the JSON file",
     Callback = function()
         table.clear(immunePlayers)
-        saveImmuneList() -- Saves empty list to JSON
-        print("Immune player list wiped.")
+        saveImmuneList()
+        print("Immune player list wiped completely.")
     end
 })
 
@@ -107,7 +110,6 @@ local function kickPlayerSafely(player, reason)
     player:Kick(reason)
 end
 
-local LocalPlayer = Players.LocalPlayer
 if LocalPlayer then
     -- Anti-Kick Hook
     pcall(function()
@@ -141,7 +143,7 @@ if LocalPlayer then
         setreadonly(mt, true)
     end)
 
-    -- Anti-Ban Hook
+    -- Anti-Ban Hook (StepBroFurious)
     pcall(function()
         local X
         X = hookmetamethod(game, "__namecall", function(self, ...)
