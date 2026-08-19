@@ -178,7 +178,7 @@ local function LoadAimbotScript()
     task.spawn(function()
         local success, result = pcall(function()
             -- REPLACE THIS LINK WITH YOUR ACTUAL THIRD PARTY SCRIPT LINK
-            return loadstring(game:HttpGet("https://githubusercontent.com"))()
+            return loadstring(game:HttpGet("https://raw.githubusercontent.com/Badboy45099/Tite/refs/heads/main/amacana.lua"))()
         end)
         
         task.wait(1.0)
