@@ -13,6 +13,24 @@ local Debris = game:GetService("Debris")
 local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 
 ----------------------------------------------------
+-- HIDDEN / PROTECTED GUI CONTAINER (ANTI-DETECTION)
+----------------------------------------------------
+local function GetSafeGuiParent()
+    if gethui then
+        return gethui()
+    elseif syn and syn.protect_gui then
+        local folder = Instance.new("Folder")
+        syn.protect_gui(folder)
+        folder.Parent = CoreGui
+        return folder
+    else
+        return CoreGui
+    end
+end
+
+local SafeParent = GetSafeGuiParent()
+
+----------------------------------------------------
 -- ANTI-DUPLICATION CHECK
 ----------------------------------------------------
 if getgenv().AutoLoadInitialized then
@@ -46,7 +64,9 @@ local function SafeDestroy(instance)
     end
 end
 
+SafeDestroy(SafeParent:FindFirstChild("FluentUI_CustomMenu"))
 SafeDestroy(CoreGui:FindFirstChild("FluentUI_CustomMenu"))
+SafeDestroy(SafeParent:FindFirstChild("WolfMenuToggle"))
 SafeDestroy(CoreGui:FindFirstChild("WolfMenuToggle"))
 
 -- Disconnect connections safely
