@@ -9,6 +9,7 @@ local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local TeleportService = game:GetService("TeleportService")
 local Debris = game:GetService("Debris")
+local NetworkClient = game:GetService("NetworkClient")
 
 local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 
@@ -20,56 +21,183 @@ if getgenv().AutoLoadInitialized then
 end
 getgenv().AutoLoadInitialized = true
 
-----------------------------------------------------
--- HIDDEN / PROTECTED GUI CONTAINER (ANTI-DETECTION)
-----------------------------------------------------
-local function GetSafeGuiParent()
-    if gethui then
-        return gethui()
-    elseif syn and syn.protect_gui then
-        local folder = Instance.new("Folder")
-        syn.protect_gui(folder)
-        folder.Parent = CoreGui
-        return folder
+-- CONFIGURATION
+local FILE_NAME = "immune_players.json"
+local immunePlayers = {}
+
+-- 📂 JSON FILE FUNCTIONS
+local function saveImmuneList()
+    local success, jsonStr = pcall(function()
+        return HttpService:JSONEncode(immunePlayers)
+    end)
+    if success and writefile then
+        writefile(FILE_NAME, jsonStr)
+        print("[Immunity] Saved list to " .. FILE_NAME)
     else
-        return CoreGui
+        warn("[Immunity] Failed to save list.")
     end
 end
 
-local SafeParent = GetSafeGuiParent()
-
-----------------------------------------------------
--- SAFE HOOKS & METATABLE PROTECTION
-----------------------------------------------------
--- Anti-Kick Hooking
-if LocalPlayer and typeof(hookfunction) == "function" then
-    pcall(function()
-        local oldKick
-        oldKick = hookfunction(LocalPlayer.Kick, function(self, reason)
-            if self == LocalPlayer then
-                return nil
-            end
-            return oldKick(self, reason)
+local function loadImmuneList()
+    if isfile and isfile(FILE_NAME) then
+        local success, content = pcall(function()
+            return readfile(FILE_NAME)
         end)
-    end)
+        if success and content ~= "" then
+            local decodeSuccess, decodedTable = pcall(function()
+                return HttpService:JSONDecode(content)
+            end)
+            if decodeSuccess and type(decodedTable) == "table" then
+                immunePlayers = decodedTable
+                print("[Immunity] Loaded existing immune list.")
+                return
+            end
+        end
+    end
+    print("[Immunity] No valid save file found. Initializing empty list.")
+    immunePlayers = {}
 end
 
--- Telemetry & Report Filtering via hookmetamethod (Prevents Crashes)
-if typeof(hookmetamethod) == "function" then
+-- Automatically load saved IDs when the script runs
+loadImmuneList()
+
+----------------------------------------------------
+-- ⚙️ UI INTEGRATION (Place inside tabs.settings)
+----------------------------------------------------
+tabs.settings:CreateInput({
+    Title = "Add Immune Player ID",
+    Description = "Type a UserID to make them immune",
+    Default = "",
+    Placeholder = "Enter Roblox UserID...",
+    NumericOnly = true,
+    Callback = function(value)
+        local targetId = tonumber(value)
+        if targetId then
+            if not table.find(immunePlayers, targetId) then
+                table.insert(immunePlayers, targetId)
+                saveImmuneList() -- Saves automatically on add
+                print("Added " .. targetId .. " to immune list.")
+            else
+                print("ID " .. targetId .. " is already immune.")
+            end
+        else
+            print("Invalid UserID entered.")
+        end
+    end
+})
+
+tabs.settings:CreateButton({
+    Title = "Clear All Immune IDs",
+    Description = "Removes immunity from all added players",
+    Callback = function()
+        table.clear(immunePlayers)
+        saveImmuneList() -- Saves empty list to JSON
+        print("Immune player list wiped.")
+    end
+})
+
+----------------------------------------------------
+-- 🛡️ PROTECTION FUNCTIONS & HOOKS
+----------------------------------------------------
+local function kickPlayerSafely(player, reason)
+    if table.find(immunePlayers, player.UserId) then
+        print(player.Name .. " is immune to automated kicks.")
+        return 
+    end
+    player:Kick(reason)
+end
+
+local LocalPlayer = Players.LocalPlayer
+if LocalPlayer then
+    -- Anti-Kick Hook
     pcall(function()
-        local oldNamecall
-        oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+        if LocalPlayer.Kick then
+            local oldKick
+            oldKick = hookfunction(LocalPlayer.Kick, function(self, reason)
+                if self == LocalPlayer then
+                    return nil 
+                end
+                return oldKick(self, reason)
+            end)
+        end
+    end)
+
+    -- Telemetry / Detection Drop Hook
+    pcall(function()
+        local mt = getrawmetatable(game)
+        local oldNamecall = mt.__namecall
+        setreadonly(mt, false)
+
+        mt.__namecall = newcclosure(function(self, ...)
             local method = getnamecallmethod()
-            
-            if method == "FireServer" or method == "InvokeServer" then
+            if tostring(method) == "FireServer" or tostring(method) == "InvokeServer" then
                 local name = tostring(self.Name):lower()
                 if name:find("cheat") or name:find("detection") or name:find("report") or name:find("kick") or name:find("telemetry") or name:find("check") then
-                    return nil
+                    return nil 
                 end
             end
-            
             return oldNamecall(self, ...)
-        end))
+        end)
+        setreadonly(mt, true)
+    end)
+
+    -- Anti-Ban Hook
+    pcall(function()
+        local X
+        X = hookmetamethod(game, "__namecall", function(self, ...)
+            local method = getnamecallmethod()
+            if method == "Ban" then
+                local eval1 = {false}
+                local eval2 = {false}
+                local args = {...}
+
+                if debug.validlevel and debug.validlevel(3) and self.Parent == nil then
+                    local stack = debug.getstack(3)
+                    local counter = 0
+                    local expected
+                    for i, v in pairs(stack) do
+                        if v == LocalPlayer.Name or v == "Ban" or v == "Packet" or v == "Network" then
+                            counter = counter + 1
+                        elseif type(v) == "number" then
+                            if type(expected) == "number" then
+                                expected = expected + v
+                            else
+                                expected = v
+                            end
+                        end
+                    end
+                    if counter == expected then
+                        eval1 = {true, counter + 5}
+                    end
+                end
+
+                if eval1 then
+                    if #args == eval1 then
+                        local counter = 0
+                        local outgoingkey
+                        for i, v in pairs(args) do
+                            if v == LocalPlayer.Name or v == "Ban" or v == "Packet" or v == "Network" then
+                                counter = counter + 1
+                            elseif tostring(i):find("userdata") then
+                                outgoingkey = v
+                            end
+                        end
+                        if counter >= eval1 then
+                            eval2 = {true, outgoingkey}
+                        end
+                    end
+                end
+
+                if eval2 then
+                    pcall(function()
+                        NetworkClient:SetOutgoingKBPSLimit(0)
+                    end)
+                    LocalPlayer:Kick("Game attempted to ban you but was blocked")
+                    return wait(9e9)
+                end
+            end
+            return X(self, ...)
+        end)
     end)
 end
 
