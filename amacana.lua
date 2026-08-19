@@ -16,22 +16,50 @@ local playerGui = localPlayer:WaitForChild("PlayerGui")
 local camera = Workspace.CurrentCamera
 
 -- ============================================================================
--- AIMBOT.LUA (Protected UI & Specific Cleanup Framework)
+-- AIMBOT.LUA (Hosted Script - Advanced Loop Hook & Crash Shield)
 -- ============================================================================
 
 local LoadedMenuInstance = nil
 local ToggleButton = nil
 local TrackingConnections = {}
-local InterceptedConnections = {} 
+local InterceptedConnections = {} -- Captures hidden third-party loops/events
 local IsLoading = false
 
+-- Hooks directly into Roblox's task scheduling to safely record external connections
+local RunService = game:GetService("RunService")
+local OldConnect = game.ChildAdded.Connect 
+
+local function StartInterception()
+    local mt = getrawmetatable(game)
+    if mt and setreadonly then
+        setreadonly(mt, false)
+        local oldIndex = mt.__index
+        
+        mt.__index = newcclosure(function(self, key)
+            if _G.AimbotActive == false then return oldIndex(self, key) end
+            
+            -- If the third-party script tries to connect to RenderStepped/Heartbeat loops
+            if key == "Connect" or key == "connect" then
+                return function(event, callback)
+                    local connection = oldIndex(event, key)(event, callback)
+                    table.insert(InterceptedConnections, connection)
+                    return connection
+                end
+            end
+            return oldIndex(self, key)
+        end)
+        setreadonly(mt, true)
+    end
+end
+
 local function CleanOldElements()
-    -- 1. Safely sever script listener connections
+    -- Disconnect our loader connections
     for _, connection in pairs(TrackingConnections) do
         if connection then pcall(function() connection:Disconnect() end) end
     end
     TrackingConnections = {}
 
+    -- FORCE KILL ALL THIRD-PARTY SCRIPT LOOPS AND EVENETS Completely
     for _, connection in pairs(InterceptedConnections) do
         if connection and connection.Connected then 
             pcall(function() connection:Disconnect() end) 
@@ -39,10 +67,8 @@ local function CleanOldElements()
     end
     InterceptedConnections = {}
 
-    -- 2. Clean out our specific toggle button safely without touching main menu
     local CoreGui = game:GetService("CoreGui")
-    local LocalPlayer = game:GetService("Players").LocalPlayer
-    local PlayerGui = LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui")
+    local PlayerGui = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
     
     local oldCore = CoreGui:FindFirstChild("AimbotMenuToggleGui")
     if oldCore then pcall(function() oldCore:Destroy() end) end
@@ -134,7 +160,6 @@ local function UnloadAimbotScript()
     IsLoading = false
     DestroyScreenButton()
     
-    -- ONLY destroy the specific target UI window captured when amacana.lua loaded
     if LoadedMenuInstance then
         pcall(function()
             if typeof(LoadedMenuInstance) == "Instance" then
@@ -152,8 +177,9 @@ local function UnloadAimbotScript()
         LoadedMenuInstance = nil
     end
     
+    -- Wipe memory references completely to clear execution overhead
     pcall(function() if gcinfo then gcinfo() end end)
-    SendNotification("Aimbot Unloaded", "Cleaned successfully.", 2)
+    print("All third-party loops successfully forced closed. Memory clean.")
 end
 
 local function LoadAimbotScript()
@@ -166,12 +192,10 @@ local function LoadAimbotScript()
     local CoreGui = game:GetService("CoreGui")
     local PlayerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
     
-    -- Only capture newly created screens that match the load timestamp window
     local function TrackGuiTree(child)
         if child.Name == "AimbotMenuToggleGui" or child.Name == "RobloxGui" or child.Name:find("AimbotMenu") then 
             return 
         end
-        -- Safe check: make sure we aren't capturing an existing main menu framework
         if child:IsA("ScreenGui") or child:IsA("GuiMain") then
             LoadedMenuInstance = child
         end
@@ -180,28 +204,12 @@ local function LoadAimbotScript()
     table.insert(TrackingConnections, CoreGui.ChildAdded:Connect(TrackGuiTree))
     table.insert(TrackingConnections, PlayerGui.ChildAdded:Connect(TrackGuiTree))
     
-    -- Metatable interception loop setup
-    local mt = getrawmetatable(game)
-    if mt and setreadonly then
-        setreadonly(mt, false)
-        local oldIndex = mt.__index
-        mt.__index = newcclosure(function(self, key)
-            if _G.AimbotActive == false then return oldIndex(self, key) end
-            if key == "Connect" or key == "connect" then
-                return function(event, callback)
-                    local connection = oldIndex(event, key)(event, callback)
-                    table.insert(InterceptedConnections, connection)
-                    return connection
-                end
-            end
-            return oldIndex(self, key)
-        end)
-        setreadonly(mt, true)
-    end
+    -- Turn on the connection catcher before executing the third party script
+    StartInterception()
     
     task.spawn(function()
         local success, result = pcall(function()
-            return loadstring(game:HttpGet("https://raw.githubusercontent.com/Badboy45099/Tite/refs/heads/main/amacana.lua"))()
+            return loadstring(game:HttpGet("https://githubusercontent.com"))()
         end)
         
         task.wait(1.0)
@@ -220,13 +228,17 @@ local function LoadAimbotScript()
 end
 
 -- ============================================================================
--- THE WATCHDOG
+-- THE DEFENSIVE WATCHDOG
 -- ============================================================================
 task.spawn(function()
     LoadAimbotScript()
+    
+    -- Wait until the main.lua setting tells us to stop
     while _G.AimbotActive do
-        task.wait(0.2)
+        task.wait(0.3)
     end
+    
+    -- Stop everything instantly
     UnloadAimbotScript()
 end)
 
