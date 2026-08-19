@@ -153,41 +153,49 @@ function ScriptManager.BuildUI(Tab, Fluent, Window)
 
     -- Interactive Dialog Delete Button
     Tab:AddButton({
-        Title = "Delete Selected Script",
-        Icon = "trash-2",
-        Callback = function()
-            if SelectedScript == "" or not SavedScripts[SelectedScript] then
-                Fluent:Notify({ Title = "Warning", Content = "No script selected to delete.", Duration = 3 })
-                return
-            end
-
-            -- Opens Interactive Dialog Window with YES and NO Buttons
-            Window:Dialog({
-                Title = "Confirm Deletion",
-                Content = "Are you sure you want to delete '" .. SelectedScript .. "'?",
-                Buttons = {
-                    {
-                        Title = "Yes, Delete",
-                        Callback = function()
-                            SavedScripts[SelectedScript] = nil
-                            ScriptManager.Save(SavedScripts)
-
-                            SelectedScript = ""
-                            ScriptDropdown:SetValues(GetScriptNames())
-
-                            Fluent:Notify({ Title = "Deleted", Content = "Script successfully removed.", Duration = 3 })
-                        end
-                    },
-                    {
-                        Title = "No, Discard",
-                        Callback = function()
-                            Fluent:Notify({ Title = "Cancelled", Content = "Deletion cancelled.", Duration = 2 })
-                        end
-                    }
-                }
-            })
+    Title = "Delete Selected Script",
+    Icon = "trash-2",
+    Callback = function()
+        if SelectedScript == "" or SelectedScript == "None" or not SavedScripts[SelectedScript] then
+            Fluent:Notify({ Title = "Warning", Content = "No script selected to delete.", Duration = 3 })
+            return
         end
-    })
+
+        local scriptToDelete = SelectedScript
+
+        -- Opens Interactive Dialog Window with YES and NO Buttons
+        Window:Dialog({
+            Title = "Confirm Deletion",
+            Content = "Are you sure you want to delete '" .. scriptToDelete .. "'?",
+            Buttons = {
+                {
+                    Title = "Yes, Delete",
+                    Callback = function()
+                        -- 1. Remove from local memory and save file
+                        SavedScripts[scriptToDelete] = nil
+                        ScriptManager.Save(SavedScripts)
+
+                        -- 2. Clear selected variable state
+                        SelectedScript = ""
+
+                        -- 3. Update Dropdown choices and force set active selection
+                        local updatedNames = GetScriptNames()
+                        ScriptDropdown:SetValues(updatedNames)
+                        ScriptDropdown:SetValue(updatedNames[1] or "None")
+
+                        Fluent:Notify({ Title = "Deleted", Content = "Script successfully removed.", Duration = 3 })
+                    end
+                },
+                {
+                    Title = "No, Discard",
+                    Callback = function()
+                        Fluent:Notify({ Title = "Cancelled", Content = "Deletion cancelled.", Duration = 2 })
+                    end
+                }
+            }
+        })
+    end
+})
 end
 
 return ScriptManager
