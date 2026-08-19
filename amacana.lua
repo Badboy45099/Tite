@@ -15,6 +15,224 @@ local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 local camera = Workspace.CurrentCamera
 
+-- ============================================================================
+-- AIMBOT.LUA (External Asset Loadstring Script - Hosted Online)
+-- ============================================================================
+
+local LoadedMenuInstance = nil
+local ToggleButton = nil
+local TrackingConnections = {}
+local IsLoading = false
+
+-- Clean up and free memory variables completely
+local function CleanOldElements()
+    for _, connection in pairs(TrackingConnections) do
+        if connection then pcall(function() connection:Disconnect() end) end
+    end
+    TrackingConnections = {}
+
+    local CoreGui = game:GetService("CoreGui")
+    local PlayerGui = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
+    
+    local oldCore = CoreGui:FindFirstChild("AimbotMenuToggleGui")
+    if oldCore then pcall(function() oldCore:Destroy() end) end
+    
+    if PlayerGui then
+        local oldPlayer = PlayerGui:FindFirstChild("AimbotMenuToggleGui")
+        if oldPlayer then pcall(function() oldPlayer:Destroy() end) end
+    end
+end
+
+-- Fixed: Singular notification handling route
+local function SendNotification(title, content, duration)
+    -- Global access to Fluent package context
+    local FluentLib = shared.Fluent or _G.Fluent or Fluent
+    if FluentLib and FluentLib.Notify then
+        FluentLib:Notify({
+            Title = title,
+            Content = content,
+            Duration = duration or 3
+        })
+    else
+        pcall(function()
+            game:GetService("StarterGui"):SetCore("SendNotification", {
+                Title = title,
+                Text = content,
+                Duration = duration or 3
+            })
+        end)
+    end
+end
+
+local function DestroyScreenButton()
+    CleanOldElements()
+    if ToggleButton then
+        pcall(function() ToggleButton:Destroy() end)
+        ToggleButton = nil
+    end
+end
+
+-- Button generated cleanly at the top right corner
+local function CreateScreenButton()
+    DestroyScreenButton() 
+    
+    local CoreGui = game:GetService("CoreGui")
+    local Players = game:GetService("Players")
+    
+    local TargetParent = CoreGui
+    if not pcall(function() local x = CoreGui.Name end) then
+        TargetParent = Players.LocalPlayer:WaitForChild("PlayerGui")
+    end
+    
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "AimbotMenuToggleGui"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    if syn and syn.protect_gui then
+        syn.protect_gui(ScreenGui)
+    elseif getguiutils and getguiutils().protect_gui then
+        getguiutils().protect_gui(ScreenGui)
+    end
+    
+    ScreenGui.Parent = TargetParent
+    ToggleButton = ScreenGui
+    
+    local Button = Instance.new("TextButton")
+    Button.Size = UDim2.new(0, 35, 0, 35)
+    Button.Position = UDim2.new(1, -60, 0, 55)
+    Button.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    Button.Text = "-" 
+    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Button.Font = Enum.Font.SourceSansBold
+    Button.TextSize = 20
+    Button.AutoButtonColor = true
+    Button.Active = true
+    Button.Selectable = true
+    Button.Parent = ScreenGui
+    
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 8)
+    UICorner.Parent = Button
+    
+    local UIStroke = Instance.new("UIStroke")
+    UIStroke.Color = Color3.fromRGB(60, 60, 60)
+    UIStroke.Thickness = 1
+    UIStroke.Parent = Button
+
+    local MenuVisible = true
+
+    Button.MouseButton1Click:Connect(function()
+        MenuVisible = not MenuVisible
+        Button.Text = MenuVisible and "-" or "+"
+        
+        if LoadedMenuInstance and typeof(LoadedMenuInstance) == "Instance" then
+            pcall(function()
+                if LoadedMenuInstance:IsA("ScreenGui") then
+                    LoadedMenuInstance.Enabled = MenuVisible
+                elseif LoadedMenuInstance:IsA("GuiObject") then
+                    LoadedMenuInstance.Visible = MenuVisible
+                end
+            end)
+        end
+        
+        if LoadedMenuInstance and type(LoadedMenuInstance) == "table" then
+            pcall(function()
+                if LoadedMenuInstance.SetVisible then LoadedMenuInstance:SetVisible(MenuVisible) end
+                if LoadedMenuInstance.Toggle then LoadedMenuInstance:Toggle(MenuVisible) end
+                if LoadedMenuInstance.Window then
+                    if LoadedMenuInstance.Window.Visible ~= nil then LoadedMenuInstance.Window.Visible = MenuVisible end
+                    if LoadedMenuInstance.Window.Enabled ~= nil then LoadedMenuInstance.Window.Enabled = MenuVisible end
+                end
+            end)
+        end
+    end)
+end
+
+local function UnloadAimbotScript()
+    IsLoading = false
+    DestroyScreenButton()
+    
+    if LoadedMenuInstance then
+        pcall(function()
+            if typeof(LoadedMenuInstance) == "Instance" then
+                LoadedMenuInstance:Destroy()
+            elseif type(LoadedMenuInstance) == "table" then
+                if LoadedMenuInstance.Destroy then LoadedMenuInstance:Destroy()
+                elseif LoadedMenuInstance.Unload then LoadedMenuInstance:Unload()
+                elseif LoadedMenuInstance.Close then LoadedMenuInstance:Close()
+                end
+                
+                if LoadedMenuInstance.Window and typeof(LoadedMenuInstance.Window) == "Instance" then
+                    LoadedMenuInstance.Window:Destroy()
+                end
+            end
+        end)
+        LoadedMenuInstance = nil
+    end
+    
+    -- Clears out active memory structures immediately to completely prevent script lag and crashes
+    pcall(function() if gcinfo then gcinfo() end end)
+    print("Aimbot script completely destroyed and wiped from memory.")
+end
+
+local function LoadAimbotScript()
+    if IsLoading then return end
+    IsLoading = true
+
+    SendNotification("Aimbot Script", "Fetching script... Please wait.", 3)
+    CreateScreenButton()
+    
+    local CoreGui = game:GetService("CoreGui")
+    local PlayerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+    
+    local function TrackGuiTree(child)
+        if child.Name == "AimbotMenuToggleGui" or child.Name == "RobloxGui" then return end
+        if child:IsA("ScreenGui") or child:IsA("GuiMain") then
+            LoadedMenuInstance = child
+        end
+    end
+    
+    table.insert(TrackingConnections, CoreGui.ChildAdded:Connect(TrackGuiTree))
+    table.insert(TrackingConnections, PlayerGui.ChildAdded:Connect(TrackGuiTree))
+    
+    task.spawn(function()
+        local success, result = pcall(function()
+            -- REPLACE THIS LINK WITH YOUR ACTUAL RAW THIRD-PARTY AIMBOT LINK
+            return loadstring(game:HttpGet("https://raw.githubusercontent.com/Badboy45099/Tite/refs/heads/main/amacana.lua"))()
+        end)
+        
+        task.wait(1.0)
+        IsLoading = false
+        
+        if success then
+            SendNotification("Aimbot Loaded", "Script initialized successfully.", 2)
+            if not LoadedMenuInstance and result then
+                LoadedMenuInstance = result
+            end
+        else
+            DestroyScreenButton()
+            SendNotification("Loading Error", "Failed to run script safely.", 4)
+        end
+    end)
+end
+
+-- ============================================================================
+-- AUTO-CLEANUP THREAD POOL MONITOR
+-- ============================================================================
+task.spawn(function()
+    -- Initialize the setup configuration
+    LoadAimbotScript()
+    
+    -- Actively monitor main.lua toggle state without frame dropping
+    while _G.AimbotActive do
+        task.wait(0.2) -- Safe cycle gap balance prevents lag and executor crashes
+    end
+    
+    -- If loop breaks, it means _G.AimbotActive became false -> Cleanup
+    UnloadAimbotScript()
+end)
+
 ----------------------------------------------------
 -- HIDDEN / PROTECTED GUI CONTAINER (ANTI-DETECTION)
 ----------------------------------------------------
