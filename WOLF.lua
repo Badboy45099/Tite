@@ -46,9 +46,7 @@ local function SafeDestroy(instance)
     end
 end
 
-SafeDestroy(SafeParent:FindFirstChild("FluentUI_CustomMenu"))
 SafeDestroy(CoreGui:FindFirstChild("FluentUI_CustomMenu"))
-SafeDestroy(SafeParent:FindFirstChild("WolfMenuToggle"))
 SafeDestroy(CoreGui:FindFirstChild("WolfMenuToggle"))
 
 -- Disconnect connections safely
