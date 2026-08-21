@@ -242,7 +242,7 @@ loadConfig()
 ----------------------------------------------------
 local StartupSound = Instance.new("Sound")
 StartupSound.SoundId = "rbxassetid://122628036520839"
-StartupSound.Volume = 0.6
+StartupSound.Volume = 1.6
 StartupSound.PlayOnRemove = false
 StartupSound.Parent = game:GetService("SoundService")
 
@@ -1632,17 +1632,14 @@ local AimbotToggle = Tabs.Special:AddToggle("AimbotToggle", {
 local function temporaryShutdown()
     _G.AimbotActive = false
     
-    -- 1. Execute external script's global cleanup macro if it exists
     if _G.AimbotCleanup then
         pcall(_G.AimbotCleanup)
     end
     
-    -- 2. Force unbind hardlocked background render loops
     local RunService = game:GetService("RunService")
     pcall(function() RunService:UnbindFromRenderStep("HardLockAimbotStep_Pre") end)
     pcall(function() RunService:UnbindFromRenderStep("HardLockAimbotStep_Post") end)
     
-    -- 3. Target and destroy visual interfaces
     local CoreGui = game:GetService("CoreGui")
     local Players = game:GetService("Players")
     local LocalPlayer = Players.LocalPlayer
@@ -1676,27 +1673,16 @@ local function temporaryShutdown()
 end
 
 local function loadFreshScript()
-    local success, err = pcall(function()
-        -- REPLACE THIS QUOTE WITH YOUR REAL RAW GITHUB LINK
+    pcall(function()
         local baseUrl = "https://raw.githubusercontent.com/Badboy45099/Tite/refs/heads/main/amacana.lua" 
-        
         local cacheBusterUrl = baseUrl .. "?nocache=" .. tostring(os.time())
         local freshCode = game:HttpGet(cacheBusterUrl)
         
-        if freshCode:find("404") or freshCode:find("Not Found") then
-            error("GitHub URL path returned a 404 error page.")
-        end
+        -- CRUCIAL FIX: Wait exactly two frames to ensure the old AimbotMenuToggleGui is 100% gone from memory
+        task.wait(0.05) 
         
-        local chunk, compileErr = loadstring(freshCode)
-        if not chunk then error(compileErr) end
-        
-        return chunk()
+        return loadstring(freshCode)()
     end)
-    
-    if not success then
-        temporaryShutdown()
-        warn("Aimbot Load Crash: " .. tostring(err))
-    end
 end
 
 AimbotToggle:OnChanged(function(state)
