@@ -1,4 +1,4 @@
-local players = game:GetService("Players")
+Local players = game:GetService("Players")
 local localPlayer = players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 local coreGui = game:GetService("CoreGui")
@@ -34,6 +34,11 @@ local STYLE = {
 	ButtonBg = Color3.fromRGB(40, 40, 40),
 	Accent = Color3.fromRGB(255, 255, 255)
 }
+
+-- Forward Declarations
+local applySavedPositions
+local setupShieldAndDrag
+local cleanEditShields
 
 -- 1. JSON FILE SYSTEM: Load Saved Layout
 local function loadGlobalLayout()
@@ -75,7 +80,7 @@ local function restoreLayoutConstraints()
 end
 
 -- 2. FILE SYSTEM: Apply Saved Properties
-local function applySavedPositions()
+applySavedPositions = function()
 	local containers = {playerGui, coreGui:WaitForChild("RobloxGui", 2)}
 	for _, container in ipairs(containers) do
 		if container then
@@ -453,7 +458,7 @@ local function highlightSelected(shield)
 end
 
 -- 6. SHIELD & DRAG SYSTEM OVERRIDE
-local function setupShieldAndDrag(targetGui)
+setupShieldAndDrag = function(targetGui)
 	if isProtectedControl(targetGui) then return end
 
 	if not initialSessionStates[targetGui] then
@@ -526,7 +531,7 @@ local function setupShieldAndDrag(targetGui)
 	end)
 end
 
-local function cleanEditShields()
+cleanEditShields = function()
 	highlightSelected(nil)
 	for _, shield in ipairs(editShields) do
 		if shield then shield:Destroy() end
@@ -534,14 +539,8 @@ local function cleanEditShields()
 	editShields = {}
 end
 
--- 7. RUNTIME CONTROLS
-btnToggleEdit.MouseButton1Click:Connect(function()
-	if isEditModeActive then return end
-	isEditModeActive = true
-	
-	statusLabel.Text = "Status: Overriding Layouts..."
-	statusLabel.TextColor3 = STYLE.Text
-	
+local function applyEditShields()
+	cleanEditShields()
 	local targets = {playerGui, coreGui:WaitForChild("RobloxGui", 2)}
 	for _, container in ipairs(targets) do
 		if container then
@@ -554,6 +553,17 @@ btnToggleEdit.MouseButton1Click:Connect(function()
 			end
 		end
 	end
+end
+
+-- 7. RUNTIME CONTROLS
+btnToggleEdit.MouseButton1Click:Connect(function()
+	if isEditModeActive then return end
+	isEditModeActive = true
+	
+	statusLabel.Text = "Status: Overriding Layouts..."
+	statusLabel.TextColor3 = STYLE.Text
+	
+	applyEditShields()
 end)
 
 btnSave.MouseButton1Click:Connect(function()
@@ -627,6 +637,20 @@ btnResetDefault.MouseButton1Click:Connect(function()
 	statusLabel.Text = "Status: Reset To Defaults!"
 	statusLabel.TextColor3 = STYLE.SubText
 end)
+
+-- AUTO-REAPPLY UPON RESPAWN / DYING
+local function onCharacterAdded(char)
+	task.wait(1.5) -- Wait for newly spawned UI elements to load in
+	applySavedPositions()
+	if isEditModeActive then
+		applyEditShields()
+	end
+end
+
+if localPlayer.Character then
+	task.spawn(onCharacterAdded, localPlayer.Character)
+end
+localPlayer.CharacterAdded:Connect(onCharacterAdded)
 
 -- Initialize
 loadGlobalLayout()
