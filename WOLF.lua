@@ -304,7 +304,7 @@ local ToggleButton = Instance.new("ImageButton")
 ToggleButton.Name = "WolfIconBtn"
 ToggleButton.Size = UDim2.new(0, 45, 0, 45)
 ToggleButton.Position = UDim2.new(0, 20, 0.5, -22)
-ToggleButton.Image = "rbxthumb://type=Asset&id=70689077582089&w=150&h=150"
+ToggleButton.Image = "rbxthumb://type=Asset&id=112381138279003&w=150&h=150"
 ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 ToggleButton.BackgroundTransparency = Settings.WolfBgWhite and 0 or 1
 ToggleButton.BorderSizePixel = 0
