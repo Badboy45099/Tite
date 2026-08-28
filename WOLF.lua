@@ -1621,7 +1621,7 @@ if Settings.AntiFling then setAntiFlingState(true) end
 ----------------------------------------------------
 -- AimBot
 ----------------------------------------------------
-_G.AimbotActive = false 
+_G.AimbotActive = _G.AimbotActive or false 
 
 local AimbotToggle = Tabs.Special:AddToggle("AimbotToggle", { 
     Title = "Aimbot", 
@@ -1661,6 +1661,7 @@ local function temporaryShutdown()
             pcall(function() PlayerGui[name]:Destroy() end) 
         end
         if Camera and Camera:FindFirstChild(name) then 
+            pcall(name) 
             pcall(function() Camera[name]:Destroy() end) 
         end
     end
@@ -1690,6 +1691,9 @@ AimbotToggle:OnChanged(function(state)
     saveConfig()
     
     if state then
+        -- Prevent loop if aimbot is already actively running
+        if _G.AimbotActive then return end 
+        
         temporaryShutdown()
         task.wait(0.2) 
         
@@ -1700,8 +1704,11 @@ AimbotToggle:OnChanged(function(state)
     end
 end)
 
-if Settings.Aimbot then
+-- Only force the visual toggle state, do not re-trigger the download loop
+if Settings.Aimbot and not _G.AimbotActive then
+    _G.AimbotActive = true
     AimbotToggle:SetValue(true)
+    task.spawn(loadFreshScript)
 end
 
 ----------------------------------------------------
