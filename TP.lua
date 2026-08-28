@@ -74,7 +74,7 @@ function TeleportModule.Create(PlayerTab, FluentLibrary)
     -- FLOATING TP BUTTON
     ----------------------------------------------------
     local DraggableIcon = Instance.new("ScreenGui")
-    local IconBtn = Instance.new("TextButton")
+    local IconBtn = Instance.new("ImageButton")
     local UICorner = Instance.new("UICorner")
 
     DraggableIcon.Name = "TpDraggableGui"
@@ -86,10 +86,7 @@ function TeleportModule.Create(PlayerTab, FluentLibrary)
     IconBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
     IconBtn.Position = UDim2.new(0.05, 0, 0.4, 0)
     IconBtn.Size = UDim2.new(0, 50, 0, 50)
-    IconBtn.Text = "TP"
-    IconBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    IconBtn.TextSize = 18
-    IconBtn.Font = Enum.Font.SourceSansBold
+    IconBtn.Image = "rbxassetid://4520179063"
     IconBtn.Active = true
     IconBtn.Draggable = true
 
@@ -104,17 +101,11 @@ function TeleportModule.Create(PlayerTab, FluentLibrary)
             if SelectedSaveName ~= "" and SavedPositions[SelectedSaveName] then
                 local pos = SavedPositions[SelectedSaveName]
                 myHRP.CFrame = CFrame.new(pos.X, pos.Y, pos.Z)
-                FluentLibrary:Notify({Title = "Teleported", Content = "TP'd to: " .. SelectedSaveName, Duration = 2})
-            else
-                FluentLibrary:Notify({Title = "TP Error", Content = "Select a saved file location first!", Duration = 2})
             end
         elseif CurrentCategoryMode == "Specific" then
             if SelectedSpecificPlayer and GetHRP(SelectedSpecificPlayer) then
                 local targetHRP = GetHRP(SelectedSpecificPlayer)
                 myHRP.CFrame = targetHRP.CFrame * CFrame.new(0, 0, 4)
-                FluentLibrary:Notify({Title = "Teleported", Content = "TP'd behind " .. SelectedSpecificPlayer.Name, Duration = 2})
-            else
-                FluentLibrary:Notify({Title = "TP Error", Content = "Select a valid player from dropdown!", Duration = 2})
             end
         elseif CurrentCategoryMode == "Random" then
             local target = nil
@@ -131,9 +122,6 @@ function TeleportModule.Create(PlayerTab, FluentLibrary)
             if target and GetHRP(target) then
                 local targetHRP = GetHRP(target)
                 myHRP.CFrame = targetHRP.CFrame * CFrame.new(0, 0, 4)
-                FluentLibrary:Notify({Title = "Teleported", Content = "TP'd to " .. target.Name, Duration = 2})
-            else
-                FluentLibrary:Notify({Title = "TP Error", Content = "No valid target available!", Duration = 2})
             end
         end
     end)
@@ -141,11 +129,11 @@ function TeleportModule.Create(PlayerTab, FluentLibrary)
     ----------------------------------------------------
     -- ATTACH TO PLAYER TAB
     ----------------------------------------------------
-    PlayerTab:AddToggle("TpBtnToggle", {
-        Title = "Show Floating TP Button",
-        Default = false,
-        Callback = function(Value)
-            DraggableIcon.Enabled = Value
+    PlayerTab:AddButton({
+        Title = "Toggle Floating TP Button",
+        Icon = "rbxassetid://4520179063",
+        Callback = function()
+            DraggableIcon.Enabled = not DraggableIcon.Enabled
         end
     })
 
@@ -197,7 +185,6 @@ function TeleportModule.Create(PlayerTab, FluentLibrary)
         Title = "Save Current Position",
         Callback = function()
             if SaveInputText == "" then
-                FluentLibrary:Notify({Title = "Error", Content = "Type a position name first!", Duration = 3})
                 return
             end
 
@@ -208,7 +195,6 @@ function TeleportModule.Create(PlayerTab, FluentLibrary)
                 WritePositionsToFile()
                 SelectedSaveName = SaveInputText
                 savedFilesDropdown:SetValues(GetSavedListKeys())
-                FluentLibrary:Notify({Title = "Saved", Content = "'" .. SaveInputText .. "' saved!", Duration = 3})
             end
         end
     })
@@ -218,7 +204,6 @@ function TeleportModule.Create(PlayerTab, FluentLibrary)
         Callback = function()
             LoadSavedPositionsFile()
             savedFilesDropdown:SetValues(GetSavedListKeys())
-            FluentLibrary:Notify({Title = "Refreshed", Content = "Saved positions reloaded.", Duration = 2})
         end
     })
 
@@ -228,7 +213,6 @@ function TeleportModule.Create(PlayerTab, FluentLibrary)
             ResetAllSavedPositions()
             SelectedSaveName = ""
             savedFilesDropdown:SetValues(GetSavedListKeys())
-            FluentLibrary:Notify({Title = "Reset Complete", Content = "All locations erased.", Duration = 3})
         end
     })
 
@@ -239,7 +223,6 @@ function TeleportModule.Create(PlayerTab, FluentLibrary)
         Title = "Pin Selected Position in 3D World",
         Callback = function()
             if SelectedSaveName == "" or not SavedPositions[SelectedSaveName] then
-                FluentLibrary:Notify({Title = "Pin Error", Content = "Select a saved file location first!", Duration = 2})
                 return
             end
 
@@ -276,7 +259,6 @@ function TeleportModule.Create(PlayerTab, FluentLibrary)
             label.TextScaled = true
 
             ActiveBeacons[SelectedSaveName] = beaconPart
-            FluentLibrary:Notify({Title = "Pinned", Content = "Beacon spawned at " .. SelectedSaveName, Duration = 2})
         end
     })
 
@@ -287,7 +269,6 @@ function TeleportModule.Create(PlayerTab, FluentLibrary)
                 if beacon then beacon:Destroy() end
             end
             ActiveBeacons = {}
-            FluentLibrary:Notify({Title = "Cleared", Content = "All visual markers removed.", Duration = 2})
         end
     })
 
@@ -314,7 +295,6 @@ function TeleportModule.Create(PlayerTab, FluentLibrary)
 
             if nearest then
                 LockedPlayer = nearest
-                FluentLibrary:Notify({Title = "Target Set", Content = "Nearest player: " .. nearest.DisplayName, Duration = 3})
             end
         end
     })
@@ -342,7 +322,6 @@ function TeleportModule.Create(PlayerTab, FluentLibrary)
                 local myHRP = GetHRP(LocalPlayer)
                 if myHRP and targetHRP then
                     myHRP.CFrame = targetHRP.CFrame * CFrame.new(3, 0, 3)
-                    FluentLibrary:Notify({Title = "Safe TP", Content = "TP'd near " .. target.Name, Duration = 2})
                 end
             end
         end
@@ -391,7 +370,6 @@ function TeleportModule.Create(PlayerTab, FluentLibrary)
         Title = "Refresh Player Name",
         Callback = function()
             specificDropdown:SetValues(GetFilteredPlayers(searchPlayerInput.Value))
-            FluentLibrary:Notify({Title = "Refreshed", Content = "Player list updated.", Duration = 2})
         end
     })
 
