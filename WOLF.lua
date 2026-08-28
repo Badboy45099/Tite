@@ -1629,7 +1629,7 @@ local AimbotToggle = Tabs.Special:AddToggle("AimbotToggle", {
     Default = Settings.Aimbot 
 }) 
 
-local function temporaryShutdown()
+local function temporaryShutdown(isTotalShutdown)
     _G.AimbotActive = false
     
     if _G.AimbotCleanup then
@@ -1646,12 +1646,22 @@ local function temporaryShutdown()
     local PlayerGui = LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui")
     local Camera = workspace.CurrentCamera
     
+    -- Only destroy the toggle button if we are doing a total script unload
     local targetUIs = {
         "AimbotNativeMenu", 
-        "AimbotMenuToggleGui", 
         "AimbotFOVScreen", 
         "FOVCircle"
     }
+    
+    if isTotalShutdown then
+        table.insert(targetUIs, "AimbotMenuToggleGui")
+    else
+        -- Just hide the +/- button instead of destroying it completely
+        local toggleGui = CoreGui:FindFirstChild("AimbotMenuToggleGui") or (PlayerGui and PlayerGui:FindFirstChild("AimbotMenuToggleGui"))
+        if toggleGui then
+            toggleGui.Enabled = false
+        end
+    end
     
     for _, name in ipairs(targetUIs) do
         if CoreGui:FindFirstChild(name) then 
@@ -1661,27 +1671,30 @@ local function temporaryShutdown()
             pcall(function() PlayerGui[name]:Destroy() end) 
         end
         if Camera and Camera:FindFirstChild(name) then 
-            pcall(name) 
             pcall(function() Camera[name]:Destroy() end) 
         end
     end
     
-    if gcinfo then 
-        pcall(function()
-            gcinfo() 
-        end)
-    end
+    if gcinfo then pcall(gcinfo) end
 end
 
 local function loadFreshScript()
+    local CoreGui = game:GetService("CoreGui")
+    local PlayerGui = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
+    local toggleGui = CoreGui:FindFirstChild("AimbotMenuToggleGui") or (PlayerGui and PlayerGui:FindFirstChild("AimbotMenuToggleGui"))
+    
+    -- If the button already exists in memory, just turn it back on!
+    if toggleGui then
+        toggleGui.Enabled = true
+        return
+    end
+
     pcall(function()
         local baseUrl = "https://raw.githubusercontent.com/Badboy45099/Tite/refs/heads/main/amacana.lua" 
         local cacheBusterUrl = baseUrl .. "?nocache=" .. tostring(os.time())
         local freshCode = game:HttpGet(cacheBusterUrl)
         
-        -- CRUCIAL FIX: Wait exactly two frames to ensure the old AimbotMenuToggleGui is 100% gone from memory
         task.wait(0.05) 
-        
         return loadstring(freshCode)()
     end)
 end
@@ -1691,20 +1704,17 @@ AimbotToggle:OnChanged(function(state)
     saveConfig()
     
     if state then
-        -- Prevent loop if aimbot is already actively running
         if _G.AimbotActive then return end 
-        
-        temporaryShutdown()
+        temporaryShutdown(false) -- Safe shutdown (hides button)
         task.wait(0.2) 
         
         _G.AimbotActive = true
         task.spawn(loadFreshScript)
     else
-        temporaryShutdown()
+        temporaryShutdown(false) -- Safe shutdown (hides button)
     end
 end)
 
--- Only force the visual toggle state, do not re-trigger the download loop
 if Settings.Aimbot and not _G.AimbotActive then
     _G.AimbotActive = true
     AimbotToggle:SetValue(true)
