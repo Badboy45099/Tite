@@ -83,10 +83,11 @@ function TeleportModule.Create(PlayerTab, FluentLibrary)
 
     IconBtn.Name = "TpBtn"
     IconBtn.Parent = DraggableIcon
-    IconBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
-    IconBtn.Position = UDim2.new(0.05, 0, 0.4, 0)
+    IconBtn.BackgroundTransparency = 1 
+    IconBtn.BorderSizePixel = 0
+    IconBtn.Position = UDim2.new(0.98, 0, 0.02, 0)
     IconBtn.Size = UDim2.new(0, 50, 0, 50)
-    IconBtn.Image = "rbxthumb://type=Asset&id=73124563025564&w=150&h=150"
+    IconBtn.Image = "rbxthumb://type=Asset&id=111311201582764&w=150&h=150"
     IconBtn.Active = true
     IconBtn.Draggable = true
 
