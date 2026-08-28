@@ -93,7 +93,7 @@ local function CreateScreenButton()
     
     local TargetParent = CoreGui
     if not pcall(function() local x = CoreGui.Name end) then
-        TargetParent = localPlayer:WaitForChild("PlayerGui")
+        TargetParent = playerGui
     end
     
     local ScreenGui = Instance.new("ScreenGui")
@@ -128,21 +128,36 @@ local function CreateScreenButton()
 
     local MenuVisible = true
 
+    -- Hook up Fluent UI Window to this button if Fluent is loaded
+    local FluentLib = shared.Fluent or _G.Fluent or Fluent
+    if FluentLib and FluentLib.Window then
+        LoadedMenuInstance = FluentLib.Window
+    end
+
     Button.MouseButton1Click:Connect(function()
         MenuVisible = not MenuVisible
         Button.Text = MenuVisible and "-" or "+"
         
-        if LoadedMenuInstance and typeof(LoadedMenuInstance) == "Instance" then
+        if LoadedMenuInstance then
             pcall(function()
-                if LoadedMenuInstance:IsA("ScreenGui") then 
-                    LoadedMenuInstance.Enabled = MenuVisible
-                elseif LoadedMenuInstance:IsA("GuiObject") then 
-                    LoadedMenuInstance.Visible = MenuVisible 
+                -- Handled Fluent window visibility toggle safely
+                if LoadedMenuInstance.Minimize then
+                    LoadedMenuInstance:Minimize()
+                elseif typeof(LoadedMenuInstance) == "Instance" then
+                    if LoadedMenuInstance:IsA("ScreenGui") then 
+                        LoadedMenuInstance.Enabled = MenuVisible
+                    elseif LoadedMenuInstance:IsA("GuiObject") then 
+                        LoadedMenuInstance.Visible = MenuVisible 
+                    end
                 end
             end)
         end
     end)
 end
+
+-- RUN THE INTERCEPTION AND SPAWN THE BUTTON!
+StartInterception()
+CreateScreenButton()
 
 ----------------------------------------------------
 -- HIDDEN / PROTECTED GUI CONTAINER (ANTI-DETECTION)
