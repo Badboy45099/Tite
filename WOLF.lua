@@ -1629,7 +1629,80 @@ local AimbotToggle = Tabs.Special:AddToggle("AimbotToggle", {
     Default = Settings.Aimbot 
 }) 
 
-local function temporaryShutdown(isTotalShutdown)
+local AimbotToggleGuiRef = nil
+
+local function setAmacanaMenuVisibility(isVisible)
+    local CoreGui = game:GetService("CoreGui")
+    local PlayerGui = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
+    
+    local targetMenu = CoreGui:FindFirstChild("AimbotNativeMenu") or (PlayerGui and PlayerGui:FindFirstChild("AimbotNativeMenu"))
+    
+    if targetMenu then
+        pcall(function()
+            if targetMenu:IsA("ScreenGui") then
+                targetMenu.Enabled = isVisible
+            elseif targetMenu:IsA("GuiObject") then
+                targetMenu.Visible = isVisible
+            else
+                targetMenu.Visible = isVisible
+            end
+        end)
+    end
+end
+
+local function createFloatingButton()
+    local CoreGui = game:GetService("CoreGui")
+    local PlayerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui", 5)
+    
+    local TargetParent = CoreGui
+    if not pcall(function() local _ = CoreGui.Name end) then
+        TargetParent = PlayerGui
+    end
+	
+    local oldCore = TargetParent:FindFirstChild("AimbotMenuToggleGui")
+    if oldCore then pcall(function() oldCore:Destroy() end) end
+    
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "AimbotMenuToggleGui"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    if syn and syn.protect_gui then syn.protect_gui(ScreenGui)
+    elseif getguiutils and getguiutils().protect_gui then getguiutils().protect_gui(ScreenGui) end
+    
+    ScreenGui.Parent = TargetParent
+    AimbotToggleGuiRef = ScreenGui
+    
+    local Button = Instance.new("TextButton")
+    Button.Size = UDim2.new(0, 35, 0, 35)
+    Button.Position = UDim2.new(1, -60, 0, 55)
+    Button.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    Button.Text = "-"
+    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Button.Font = Enum.Font.SourceSansBold
+    Button.TextSize = 20
+    Button.Active = true
+    Button.Draggable = true -- Users can drag it around
+    Button.Parent = ScreenGui
+    
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 8)
+    UICorner.Parent = Button
+    
+    local UIStroke = Instance.new("UIStroke")
+    UIStroke.Color = Color3.fromRGB(60, 60, 60)
+    UIStroke.Thickness = 1
+    UIStroke.Parent = Button
+
+    local MenuVisible = true
+    Button.MouseButton1Click:Connect(function()
+        MenuVisible = not MenuVisible
+        Button.Text = MenuVisible and "-" or "+"
+        setAmacanaMenuVisibility(MenuVisible)
+    end)
+end
+
+local function cleanAndDestroyAimbot()
     _G.AimbotActive = false
     
     if _G.AimbotCleanup then
@@ -1641,54 +1714,34 @@ local function temporaryShutdown(isTotalShutdown)
     pcall(function() RunService:UnbindFromRenderStep("HardLockAimbotStep_Post") end)
     
     local CoreGui = game:GetService("CoreGui")
-    local Players = game:GetService("Players")
-    local LocalPlayer = Players.LocalPlayer
-    local PlayerGui = LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui")
+    local PlayerGui = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
     local Camera = workspace.CurrentCamera
     
-    -- Only destroy the toggle button if we are doing a total script unload
     local targetUIs = {
-        "AimbotNativeMenu", 
+        "AimbotNativeMenu",
         "AimbotFOVScreen", 
-        "FOVCircle"
+        "FOVCircle",
+        "AimbotMenuToggleGui"
     }
     
-    if isTotalShutdown then
-        table.insert(targetUIs, "AimbotMenuToggleGui")
-    else
-        -- Just hide the +/- button instead of destroying it completely
-        local toggleGui = CoreGui:FindFirstChild("AimbotMenuToggleGui") or (PlayerGui and PlayerGui:FindFirstChild("AimbotMenuToggleGui"))
-        if toggleGui then
-            toggleGui.Enabled = false
-        end
+    if AimbotToggleGuiRef then
+        pcall(function() AimbotToggleGuiRef:Destroy() end)
+        AimbotToggleGuiRef = nil
     end
     
     for _, name in ipairs(targetUIs) do
-        if CoreGui:FindFirstChild(name) then 
-            pcall(function() CoreGui[name]:Destroy() end) 
-        end
-        if PlayerGui and PlayerGui:FindFirstChild(name) then 
-            pcall(function() PlayerGui[name]:Destroy() end) 
-        end
-        if Camera and Camera:FindFirstChild(name) then 
-            pcall(function() Camera[name]:Destroy() end) 
-        end
+        if CoreGui:FindFirstChild(name) then pcall(function() CoreGui[name]:Destroy() end) end
+        if PlayerGui and PlayerGui:FindFirstChild(name) then pcall(function() PlayerGui[name]:Destroy() end) end
+        if Camera and Camera:FindFirstChild(name) then pcall(function() Camera[name]:Destroy() end) end
     end
     
     if gcinfo then pcall(gcinfo) end
 end
 
 local function loadFreshScript()
-    local CoreGui = game:GetService("CoreGui")
-    local PlayerGui = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
-    local toggleGui = CoreGui:FindFirstChild("AimbotMenuToggleGui") or (PlayerGui and PlayerGui:FindFirstChild("AimbotMenuToggleGui"))
-    
-    -- If the button already exists in memory, just turn it back on!
-    if toggleGui then
-        toggleGui.Enabled = true
-        return
-    end
-
+	
+    createFloatingButton()
+	
     pcall(function()
         local baseUrl = "https://raw.githubusercontent.com/Badboy45099/Tite/refs/heads/main/amacana.lua" 
         local cacheBusterUrl = baseUrl .. "?nocache=" .. tostring(os.time())
@@ -1699,19 +1752,17 @@ local function loadFreshScript()
     end)
 end
 
+-- Fluent UI Toggle Connection
 AimbotToggle:OnChanged(function(state)
     Settings.Aimbot = state
     saveConfig()
     
     if state then
         if _G.AimbotActive then return end 
-        temporaryShutdown(false) -- Safe shutdown (hides button)
-        task.wait(0.2) 
-        
         _G.AimbotActive = true
         task.spawn(loadFreshScript)
     else
-        temporaryShutdown(false) -- Safe shutdown (hides button)
+        cleanAndDestroyAimbot()
     end
 end)
 
