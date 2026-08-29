@@ -293,6 +293,35 @@ local Tabs = {
 
 getgenv().Tabs = Tabs
 
+task.spawn(function()
+    task.wait(3.0)
+    pcall(function()
+        if Window.UIElements and Window.UIElements.Main then
+            local mainFrame = Window.UIElements.Main
+            local tabContainer = mainFrame:FindFirstChild("TabContainer") or mainFrame:FindFirstChild("Container")
+            if tabContainer then
+                for _, child in ipairs(tabContainer:GetChildren()) do
+                    if child:IsA("Frame") or child:IsA("ScrollingFrame") then
+                        -- Check if this container corresponds to an empty initialization page
+                        if #child:GetChildren() <= 1 and not child.Name:find("Player") then
+                            child.Visible = false
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    
+    -- Select Player tab as standard active page
+    pcall(function()
+        if Tabs.Player and Tabs.Player.Select then
+            Tabs.Player:Select()
+        elseif Window.SelectTab then
+            Window:SelectTab(1)
+        end
+    end)
+end)
+
 ----------------------------------------------------
 -- TOGGLE BUTTON
 ----------------------------------------------------
