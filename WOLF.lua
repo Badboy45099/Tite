@@ -1959,8 +1959,6 @@ Tabs.Settings:AddButton({
     end
 })
 
-Tabs.Player:Select()
-
 ----------------------------------------------------
 -- EZACCESS TOOLS
 ----------------------------------------------------
@@ -2322,3 +2320,5 @@ task.spawn(function()
         end
     })
 end)
+
+Tabs.Player:Select()
