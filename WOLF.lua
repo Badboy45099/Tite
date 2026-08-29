@@ -1859,14 +1859,14 @@ end)
 -- OTHER TABS & SETTINGS
 ----------------------------------------------------
 
-----------------------------------------------
+----------------------------------------------------
 -- CUSTOM LOADSTRING MANAGER INSIDE TABS.GAMES
-----------------------------------------------
+----------------------------------------------------
 local ScriptManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Badboy45099/Tite/refs/heads/main/Settings/scriptmanager.lua"))()
 
 -- Builds UI directly inside Tabs.Games without crash risks
 ScriptManager.BuildUI(Tabs.Games, Fluent)
-------------------------------------------------------
+----------------------------------------------------
 
 local WolfBgToggle = Tabs.Settings:AddToggle("WolfBgToggle", {
     Title = "Wolf Icon Background (White)",
@@ -1908,3 +1908,365 @@ Tabs.Settings:AddButton({
 })
 
 Tabs.Player:Select()
+
+----------------------------------------------------
+-- EZACCESS TOOLS
+----------------------------------------------------
+pcall(function()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/Badboy45099/Tite/refs/heads/main/TP.lua"))()
+end)
+
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+local ConfigFileName = "FluentUI_SavedPositions.json"
+local SavedPositions = {}
+local CurrentCategoryMode = "Saved position"
+local SelectedSaveName = ""
+local SelectedSpecificPlayer = nil
+local LockedPlayer = nil
+local LockModeEnabled = false
+
+local WOLF_ASSET_THUMB = "rbxthumb://type=Asset&id=107704287773835&w=150&h=150"
+
+local function GetHRP(target)
+    if type(target) == "string" then target = Players:FindFirstChild(target) end
+    if target and target.Character then
+        return target.Character:FindFirstChild("HumanoidRootPart")
+    end
+    return nil
+end
+
+local function LoadSavedPositionsFile()
+    if isfile and isfile(ConfigFileName) then
+        local success, content = pcall(readfile, ConfigFileName)
+        if success and content then
+            local decodedOk, decodedData = pcall(function() return HttpService:JSONDecode(content) end)
+            if decodedOk and type(decodedData) == "table" then
+                SavedPositions = decodedData
+            end
+        end
+    end
+end
+LoadSavedPositionsFile()
+
+local function GetPlayerNamesList()
+    local list = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then table.insert(list, p.Name) end
+    end
+    return #list > 0 and list or {"No players"}
+end
+
+local function GetSavedListKeys()
+    local keys = {}
+    if SavedPositions then
+        for name, _ in pairs(SavedPositions) do table.insert(keys, name) end
+    end
+    return #keys > 0 and keys or {"No saved positions"}
+end
+
+----------------------------------------------------
+-- FLOATING SHORTCUT OVERLAY SETUP
+----------------------------------------------------
+local EZScreenGui = Instance.new("ScreenGui")
+EZScreenGui.Name = "EZAccess_OverlayUI"
+EZScreenGui.ResetOnSpawn = false
+EZScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+pcall(function() EZScreenGui.Parent = CoreGui end)
+if not EZScreenGui.Parent then EZScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+local EZ_Widgets = {}
+
+local function MakeFrameDraggable(guiObject)
+    local dragging, dragInput, dragStart, startPos
+
+    guiObject.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = guiObject.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    guiObject.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            guiObject.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
+local function CreateShortcutWidget(idName, layoutOrder, hasCodeBtn, onIconClick, populateListFunc, onListSelectFunc)
+    local defaultWidth = hasCodeBtn and 58 or 28
+
+    local widgetFrame = Instance.new("Frame")
+    widgetFrame.Name = "EZWidget_" .. idName
+    widgetFrame.Size = UDim2.new(0, defaultWidth, 0, 28)
+    widgetFrame.Position = UDim2.new(0.02, 0, 0.35 + (layoutOrder * 0.08), 0)
+    widgetFrame.BackgroundTransparency = 1
+    widgetFrame.Visible = false
+    widgetFrame.Parent = EZScreenGui
+	
+    MakeFrameDraggable(widgetFrame)
+	
+    local rowBar = Instance.new("Frame")
+    rowBar.Name = "RowBar"
+    rowBar.Size = UDim2.new(0, defaultWidth, 0, 28)
+    rowBar.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+    rowBar.BackgroundTransparency = 0.35
+    rowBar.BorderSizePixel = 0
+    rowBar.Parent = widgetFrame
+
+    local rowCorner = Instance.new("UICorner")
+    rowCorner.CornerRadius = UDim.new(0, 6)
+    rowCorner.Parent = rowBar
+
+    local rowLayout = Instance.new("UIListLayout")
+    rowLayout.FillDirection = Enum.FillDirection.Horizontal
+    rowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    rowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    rowLayout.Padding = UDim.new(0, 3)
+    rowLayout.Parent = rowBar
+
+    local rowPadding = Instance.new("UIPadding")
+    rowPadding.PaddingLeft = UDim.new(0, 3)
+    rowPadding.PaddingRight = UDim.new(0, 3)
+    rowPadding.Parent = rowBar
+
+    -- Transparent Icon Button
+    local iconBtn = Instance.new("ImageButton")
+    iconBtn.Name = "IconBtn"
+    iconBtn.Size = UDim2.new(0, 22, 0, 22)
+    iconBtn.BackgroundTransparency = 1
+    iconBtn.ImageTransparency = 0.2
+    iconBtn.Image = WOLF_ASSET_THUMB
+    iconBtn.ScaleType = Enum.ScaleType.Fit
+    iconBtn.LayoutOrder = 1
+    iconBtn.Parent = rowBar
+
+    iconBtn.MouseButton1Click:Connect(function()
+        if onIconClick then onIconClick() end
+    end)
+
+    -- Dropdown List positioned adjacent/right of the controls
+    local listContainer = Instance.new("ScrollingFrame")
+    listContainer.Name = "ListContainer"
+    listContainer.Size = UDim2.new(0, 130, 0, 90)
+    listContainer.Position = UDim2.new(1, 4, 0, 0)
+    listContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    listContainer.BackgroundTransparency = 0.15
+    listContainer.BorderSizePixel = 0
+    listContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+    listContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    listContainer.ScrollBarThickness = 3
+    listContainer.Visible = false
+    listContainer.ZIndex = 10
+    listContainer.Parent = widgetFrame
+
+    local listCorner = Instance.new("UICorner")
+    listCorner.CornerRadius = UDim.new(0, 6)
+    listCorner.Parent = listContainer
+
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.Padding = UDim.new(0, 2)
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Parent = listContainer
+
+    local function RefreshListUI()
+        for _, child in ipairs(listContainer:GetChildren()) do
+            if child:IsA("TextButton") then child:Destroy() end
+        end
+
+        local items = populateListFunc and populateListFunc() or {}
+        for _, itemText in ipairs(items) do
+            local itemBtn = Instance.new("TextButton")
+            itemBtn.Name = "Item_" .. tostring(itemText)
+            itemBtn.Size = UDim2.new(1, -4, 0, 20)
+            itemBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+            itemBtn.BackgroundTransparency = 0.2
+            itemBtn.Text = tostring(itemText)
+            itemBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+            itemBtn.Font = Enum.Font.SourceSans
+            itemBtn.TextSize = 12
+            itemBtn.ZIndex = 11
+            itemBtn.Parent = listContainer
+
+            local btnCorner = Instance.new("UICorner")
+            btnCorner.CornerRadius = UDim.new(0, 4)
+            btnCorner.Parent = itemBtn
+
+            itemBtn.MouseButton1Click:Connect(function()
+                if onListSelectFunc then onListSelectFunc(itemText) end
+                listContainer.Visible = false
+                widgetFrame.Size = UDim2.new(0, defaultWidth, 0, 28)
+            end)
+        end
+    end
+
+    if hasCodeBtn then
+        local codeBtn = Instance.new("TextButton")
+        codeBtn.Name = "CodeToggle"
+        codeBtn.Size = UDim2.new(0, 26, 0, 20)
+        codeBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        codeBtn.BorderColor3 = Color3.fromRGB(70, 70, 70)
+        codeBtn.Text = "</>"
+        codeBtn.TextColor3 = Color3.fromRGB(80, 255, 160)
+        codeBtn.Font = Enum.Font.Code
+        codeBtn.TextSize = 11
+        codeBtn.LayoutOrder = 2
+        codeBtn.Parent = rowBar
+
+        local codeCorner = Instance.new("UICorner")
+        codeCorner.CornerRadius = UDim.new(0, 4)
+        codeCorner.Parent = codeBtn
+
+        codeBtn.MouseButton1Click:Connect(function()
+            local willBeVisible = not listContainer.Visible
+            listContainer.Visible = willBeVisible
+            if willBeVisible then
+                RefreshListUI()
+                widgetFrame.Size = UDim2.new(0, defaultWidth + 134, 0, 90)
+            else
+                widgetFrame.Size = UDim2.new(0, defaultWidth, 0, 28)
+            end
+        end)
+    end
+
+    EZ_Widgets[idName] = widgetFrame
+    return widgetFrame
+end
+
+----------------------------------------------------
+-- REGISTER SHORTCUT ACTIONS & DROP DOWN HOOKS
+----------------------------------------------------
+-- Specific
+CreateShortcutWidget("Specific", 1, true,
+    function()
+        local myHRP = GetHRP(LocalPlayer)
+        if not myHRP then return end
+        if SelectedSpecificPlayer then
+            local targetHRP = GetHRP(SelectedSpecificPlayer)
+            if targetHRP then myHRP.CFrame = targetHRP.CFrame * CFrame.new(0, 0, 4) end
+        end
+    end,
+    function() return GetPlayerNamesList() end,
+    function(selectedName)
+        if selectedName ~= "No players" then
+            SelectedSpecificPlayer = selectedName
+            CurrentCategoryMode = "Specific"
+        end
+    end
+)
+-- Follow
+CreateShortcutWidget("Follow", 2, true,
+    function()
+        getgenv().FollowActive = not getgenv().FollowActive
+        if getgenv().FollowActive then
+            if typeof(StartFollowing) == "function" then StartFollowing() end
+        else
+            if typeof(StopFollowing) == "function" then StopFollowing() end
+        end
+    end,
+    function() return GetPlayerNamesList() end,
+    function(selectedName)
+        if selectedName ~= "No players" then
+            getgenv().FollowTargetName = selectedName
+        end
+    end
+)
+-- Saved Position
+CreateShortcutWidget("SavedPos", 3, true,
+    function()
+        local myHRP = GetHRP(LocalPlayer)
+        if not myHRP then return end
+        if SelectedSaveName ~= "" and SavedPositions[SelectedSaveName] then
+            local pos = SavedPositions[SelectedSaveName]
+            myHRP.CFrame = CFrame.new(pos.X or pos.x or pos[1], pos.Y or pos.y or pos[2], pos.Z or pos.z or pos[3])
+        end
+    end,
+    function() return GetSavedListKeys() end,
+    function(selectedSave)
+        if selectedSave ~= "No saved positions" then
+            SelectedSaveName = selectedSave
+            CurrentCategoryMode = "Saved position"
+        end
+    end
+)
+-- Random Teleport (Icon Only)
+CreateShortcutWidget("Random", 4, false,
+    function()
+        local myHRP = GetHRP(LocalPlayer)
+        if not myHRP then return end
+
+        local target = nil
+        if LockModeEnabled and LockedPlayer then
+            target = LockedPlayer
+        else
+            local validPlayers = {}
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and GetHRP(p) then table.insert(validPlayers, p) end
+            end
+            if #validPlayers > 0 then target = validPlayers[math.random(1, #validPlayers)] end
+        end
+
+        if target and GetHRP(target) then
+            myHRP.CFrame = GetHRP(target).CFrame * CFrame.new(0, 0, 4)
+        end
+    end
+)
+
+----------------------------------------------------
+-- EZACESS TAB MENU POPULATION
+----------------------------------------------------
+task.spawn(function()
+    repeat task.wait() until Tabs and (Tabs.EZAcess or Tabs.EZAccess)
+    local EZTab = Tabs.EZAcess or Tabs.EZAccess
+
+    local EZSec = EZTab:AddSection("EZAccess Shortcut Toggles")
+
+    EZSec:AddToggle("EZToggle_Specific", {
+        Title = "Show Specific Player Shortcut",
+        Default = false,
+        Callback = function(state)
+            if EZ_Widgets["Specific"] then EZ_Widgets["Specific"].Visible = state end
+        end
+    })
+
+    EZSec:AddToggle("EZToggle_Follow", {
+        Title = "Show Follow Player Shortcut",
+        Default = false,
+        Callback = function(state)
+            if EZ_Widgets["Follow"] then EZ_Widgets["Follow"].Visible = state end
+        end
+    })
+
+    EZSec:AddToggle("EZToggle_SavedPos", {
+        Title = "Show Saved Position Shortcut",
+        Default = false,
+        Callback = function(state)
+            if EZ_Widgets["SavedPos"] then EZ_Widgets["SavedPos"].Visible = state end
+        end
+    })
+
+    EZSec:AddToggle("EZToggle_Random", {
+        Title = "Show Random Teleport Shortcut",
+        Default = false,
+        Callback = function(state)
+            if EZ_Widgets["Random"] then EZ_Widgets["Random"].Visible = state end
+        end
+    })
+end)
