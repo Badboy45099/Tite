@@ -288,7 +288,7 @@ local Tabs = {
     Special = Window:AddTab({ Title = "Special", Icon = "skull" }),
     Games = Window:AddTab({ Title = "Games", Icon = "gamepad-2" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" }),
-	EZAccess = Window:AddTab({ Title = "EZAccess", Icon = "clock" })
+	EZAcess = Window:AddTab({ Title = "EZAcess", Icon = "clock" })
 }
 
 getgenv().Tabs = Tabs
