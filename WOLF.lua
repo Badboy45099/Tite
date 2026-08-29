@@ -288,7 +288,7 @@ local Tabs = {
     Special = Window:AddTab({ Title = "Special", Icon = "skull" }),
     Games = Window:AddTab({ Title = "Games", Icon = "gamepad-2" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" }),
-	EZAcess = Window:AddTab({ Title = "EZAcess", Icon = "clock" })
+	EZAccess = Window:AddTab({ Title = "EZAccess", Icon = "clock" })
 }
 
 getgenv().Tabs = Tabs
@@ -1966,9 +1966,17 @@ pcall(function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/Badboy45099/Tite/refs/heads/main/TP.lua"))()
 end)
 
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local LocalPlayer = Players.LocalPlayer
+
+-- Data Storage Declarations
 local ConfigFileName = "FluentUI_SavedPositions.json"
 local SavedPositions = {}
 local CurrentCategoryMode = "Saved position"
@@ -1979,6 +1987,7 @@ local LockModeEnabled = false
 
 local WOLF_ASSET_THUMB = "rbxthumb://type=Asset&id=107704287773835&w=150&h=150"
 
+-- Helper Functions
 local function GetHRP(target)
     if type(target) == "string" then target = Players:FindFirstChild(target) end
     if target and target.Character then
@@ -2070,9 +2079,11 @@ local function CreateShortcutWidget(idName, layoutOrder, hasCodeBtn, onIconClick
     widgetFrame.BackgroundTransparency = 1
     widgetFrame.Visible = false
     widgetFrame.Parent = EZScreenGui
-	
+
+    -- Enable Dragging directly on this button container
     MakeFrameDraggable(widgetFrame)
-	
+
+    -- Compact Row Bar housing [ ICON ] [ </> ] closely together
     local rowBar = Instance.new("Frame")
     rowBar.Name = "RowBar"
     rowBar.Size = UDim2.new(0, defaultWidth, 0, 28)
@@ -2112,7 +2123,7 @@ local function CreateShortcutWidget(idName, layoutOrder, hasCodeBtn, onIconClick
         if onIconClick then onIconClick() end
     end)
 
-    -- Dropdown List positioned adjacent/right of the controls
+    -- Dropdown List positioned adjacent/right of the controls: [ ICON ] [ </> ] [ LIST ]
     local listContainer = Instance.new("ScrollingFrame")
     listContainer.Name = "ListContainer"
     listContainer.Size = UDim2.new(0, 130, 0, 90)
@@ -2221,6 +2232,7 @@ CreateShortcutWidget("Specific", 1, true,
         end
     end
 )
+
 -- Follow
 CreateShortcutWidget("Follow", 2, true,
     function()
@@ -2238,6 +2250,7 @@ CreateShortcutWidget("Follow", 2, true,
         end
     end
 )
+
 -- Saved Position
 CreateShortcutWidget("SavedPos", 3, true,
     function()
@@ -2256,6 +2269,7 @@ CreateShortcutWidget("SavedPos", 3, true,
         end
     end
 )
+
 -- Random Teleport (Icon Only)
 CreateShortcutWidget("Random", 4, false,
     function()
@@ -2280,7 +2294,7 @@ CreateShortcutWidget("Random", 4, false,
 )
 
 ----------------------------------------------------
--- EZACESS TAB MENU POPULATION
+-- INTEGRATED EZACESS TAB MENU POPULATION
 ----------------------------------------------------
 task.spawn(function()
     repeat task.wait() until Tabs and (Tabs.EZAcess or Tabs.EZAccess)
@@ -2320,5 +2334,3 @@ task.spawn(function()
         end
     })
 end)
-
-Tabs.Player:Select()
