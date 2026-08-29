@@ -1,4 +1,4 @@
-Local players = game:GetService("Players")
+local players = game:GetService("Players")
 local localPlayer = players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 local coreGui = game:GetService("CoreGui")
@@ -34,11 +34,6 @@ local STYLE = {
 	ButtonBg = Color3.fromRGB(40, 40, 40),
 	Accent = Color3.fromRGB(255, 255, 255)
 }
-
--- Forward Declarations
-local applySavedPositions
-local setupShieldAndDrag
-local cleanEditShields
 
 -- 1. JSON FILE SYSTEM: Load Saved Layout
 local function loadGlobalLayout()
@@ -80,7 +75,7 @@ local function restoreLayoutConstraints()
 end
 
 -- 2. FILE SYSTEM: Apply Saved Properties
-applySavedPositions = function()
+local function applySavedPositions()
 	local containers = {playerGui, coreGui:WaitForChild("RobloxGui", 2)}
 	for _, container in ipairs(containers) do
 		if container then
@@ -458,7 +453,7 @@ local function highlightSelected(shield)
 end
 
 -- 6. SHIELD & DRAG SYSTEM OVERRIDE
-setupShieldAndDrag = function(targetGui)
+local function setupShieldAndDrag(targetGui)
 	if isProtectedControl(targetGui) then return end
 
 	if not initialSessionStates[targetGui] then
@@ -531,7 +526,7 @@ setupShieldAndDrag = function(targetGui)
 	end)
 end
 
-cleanEditShields = function()
+local function cleanEditShields()
 	highlightSelected(nil)
 	for _, shield in ipairs(editShields) do
 		if shield then shield:Destroy() end
@@ -640,7 +635,7 @@ end)
 
 -- AUTO-REAPPLY UPON RESPAWN / DYING
 local function onCharacterAdded(char)
-	task.wait(1.5) -- Wait for newly spawned UI elements to load in
+	task.wait(1.5)
 	applySavedPositions()
 	if isEditModeActive then
 		applyEditShields()
